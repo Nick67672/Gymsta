@@ -1,0 +1,44 @@
+{
+  "expo": {
+    "name": "Gymsta",
+    "slug": "gymsta",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "gymsta",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "plugins": [
+      "expo-router",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "The app accesses your photos to let you share them with your friends.",
+          "cameraPermission": "The app accesses your camera to let you take photos to share with your friends."
+        }
+      ]
+    ],
+    "ios": {
+      "bundleIdentifier": "com.vanta.gymsta",
+      "buildNumber": "2",
+      "supportsTablet": true,
+      "config": {
+        "usesNonExemptEncryption": false
+      },
+      "infoPlist": {
+        "NSPhotoLibraryUsageDescription": "This app uses the photo library to let you share photos with your friends.",
+        "NSCameraUsageDescription": "This app uses the camera to let you take photos to share with your friends.",
+        "NSPhotoLibraryAddUsageDescription": "This app saves photos to your photo library."
+      },
+      "teamId": "5W23W64DY5"
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "experiments": {
+      "typedRoutes": true
+    }
+  }
+}
