@@ -5,6 +5,7 @@ import { useFrameworkReady } from '@/hooks/useFrameworkReady';
 import { useAuth } from '@/hooks/useAuth';
 import { ThemeProvider, useTheme } from '@/context/ThemeContext';
 import { AuthProvider } from '@/context/AuthContext';
+import { BlockingProvider } from '@/context/BlockingContext';
 
 function AppContent() {
   useFrameworkReady();
@@ -33,7 +34,9 @@ export default function RootLayout() {
   return (
     <ThemeProvider>
       <AuthProvider>
-        <AppContent />
+        <BlockingProvider>
+          <AppContent />
+        </BlockingProvider>
       </AuthProvider>
     </ThemeProvider>
   );

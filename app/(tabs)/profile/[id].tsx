@@ -4,6 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Heart, Pause, Play, MoreVertical } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { Video, ResizeMode } from 'expo-av';
+import { useAuth } from '@/context/AuthContext';
+import { useBlocking } from '@/context/BlockingContext';
 
 interface Post {
   id: string;
@@ -25,6 +27,8 @@ interface Post {
 export default function PostDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
+  const { isAuthenticated, showAuthModal } = useAuth();
+  const { blockUser } = useBlocking();
   const [post, setPost] = useState<Post | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -34,6 +38,7 @@ export default function PostDetailScreen() {
   const [isPlaying, setIsPlaying] = useState(false);
   const videoRef = useRef<Video>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [blocking, setBlocking] = useState(false);
   
   const screenWidth = Dimensions.get('window').width;
 
@@ -204,6 +209,36 @@ export default function PostDetailScreen() {
     );
   };
 
+  const handleBlockUser = async () => {
+    if (!post) return;
+    
+    try {
+      setBlocking(true);
+      setShowMenu(false);
+      
+      await blockUser(post.profiles.id);
+      
+      Alert.alert(
+        'User Blocked', 
+        `You have blocked ${post.profiles.username}. They will no longer be able to message you, and you won't see their posts.`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate back to avoid showing blocked user's content
+              router.back();
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error blocking user:', error);
+      Alert.alert('Error', 'Failed to block user. Please try again.');
+    } finally {
+      setBlocking(false);
+    }
+  };
+
   useEffect(() => {
     if (id) {
       loadPost();
@@ -344,8 +379,16 @@ export default function PostDetailScreen() {
       >
         <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowMenu(false)}>
           <View style={styles.menuPopup}>
-            <TouchableOpacity style={styles.blockButton} onPress={() => { setShowMenu(false); Alert.alert('Blocked', 'User has been blocked.'); }}>
-              <Text style={styles.blockButtonText}>Block User</Text>
+            <TouchableOpacity 
+              style={[styles.blockButton, blocking && { opacity: 0.7 }]} 
+              onPress={handleBlockUser}
+              disabled={blocking}
+            >
+              {blocking ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.blockButtonText}>Block User</Text>
+              )}
             </TouchableOpacity>
           </View>
         </TouchableOpacity>

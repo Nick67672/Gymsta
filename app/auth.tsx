@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Modal, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, Modal, ScrollView, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { ArrowLeft, Check } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
@@ -8,7 +8,7 @@ import Colors from '@/constants/Colors';
 
 export default function AuthScreen() {
   const params = useLocalSearchParams();
-  const initialMode = params.mode === 'signup' ? 'signup' : 'signin';
+  const initialMode = params.mode === 'signin' ? 'signin' : 'signup';
   
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
   const [email, setEmail] = useState('');
@@ -19,6 +19,10 @@ export default function AuthScreen() {
   const colors = Colors[theme];
   const [eulaChecked, setEulaChecked] = useState(false);
   const [showEula, setShowEula] = useState(false);
+
+  const dismissKeyboard = () => {
+    Keyboard.dismiss();
+  };
 
   async function signInWithEmail() {
     if (!email.trim() || !password.trim()) {
@@ -86,102 +90,103 @@ export default function AuthScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <View style={styles.header}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => router.back()}>
-          <ArrowLeft size={24} color={colors.text} />
-        </TouchableOpacity>
-      </View>
-      
-      <View style={styles.formContainer}>
-        <Text style={[styles.headerText, { color: colors.tint }]}>
-          {mode === 'signin' ? 'Welcome Back' : 'Create Account'}
-        </Text>
-        
-        {error && <Text style={styles.error}>{error}</Text>}
-        
-        <TextInput
-          style={[styles.input, { 
-            borderColor: colors.border,
-            backgroundColor: colors.inputBackground,
-            color: colors.text 
-          }]}
-          placeholder="Email"
-          placeholderTextColor={colors.textSecondary}
-          value={email}
-          onChangeText={setEmail}
-          autoCapitalize="none"
-          keyboardType="email-address"
-        />
-        
-        <TextInput
-          style={[styles.input, { 
-            borderColor: colors.border,
-            backgroundColor: colors.inputBackground,
-            color: colors.text 
-          }]}
-          placeholder="Password"
-          placeholderTextColor={colors.textSecondary}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoCapitalize="none"
-        />
-
-        {mode === 'signup' && (
+    <TouchableWithoutFeedback onPress={dismissKeyboard}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.header}>
           <TouchableOpacity
-            style={styles.eulaRow}
-            onPress={() => setEulaChecked(!eulaChecked)}
-            activeOpacity={0.7}
-          >
-            <View style={[styles.checkbox, eulaChecked && { backgroundColor: colors.tint, borderColor: colors.tint }]}> 
-              {eulaChecked && <Check size={16} color="#fff" />}
-            </View>
-            <Text style={[styles.eulaText, { color: colors.text }]}>by checking this box you agree to the <Text style={[styles.eulaLink, { color: colors.tint }]} onPress={(e) => { e.stopPropagation(); setShowEula(true); }}>EULA</Text></Text>
+            style={styles.backButton}
+            onPress={() => router.back()}>
+            <ArrowLeft size={24} color={colors.text} />
           </TouchableOpacity>
-        )}
-
-        <TouchableOpacity
-          style={[styles.button, styles.signInButton, loading && styles.buttonDisabled, { backgroundColor: colors.button }]}
-          onPress={mode === 'signin' ? signInWithEmail : signUpWithEmail}
-          disabled={loading || (mode === 'signup' && !eulaChecked)}>
-          {loading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>
-              {mode === 'signin' ? 'Sign In' : 'Sign Up'}
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.switchModeButton}
-          onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}>
-          <Text style={[styles.switchModeText, { color: colors.tint }]}>
-            {mode === 'signin' ? 'Need an account? Sign Up' : 'Already have an account? Sign In'}
+        </View>
+        
+        <View style={styles.formContainer}>
+          <Text style={[styles.headerText, { color: colors.tint }]}>
+            {mode === 'signin' ? 'Welcome Back' : 'Create Account'}
           </Text>
-        </TouchableOpacity>
-      </View>
+          
+          {error && <Text style={styles.error}>{error}</Text>}
+          
+          <TextInput
+            style={[styles.input, { 
+              borderColor: colors.border,
+              backgroundColor: colors.inputBackground,
+              color: colors.text 
+            }]}
+            placeholder="Email"
+            placeholderTextColor={colors.textSecondary}
+            value={email}
+            onChangeText={setEmail}
+            autoCapitalize="none"
+            keyboardType="email-address"
+          />
+          
+          <TextInput
+            style={[styles.input, { 
+              borderColor: colors.border,
+              backgroundColor: colors.inputBackground,
+              color: colors.text 
+            }]}
+            placeholder="Password"
+            placeholderTextColor={colors.textSecondary}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+            autoCapitalize="none"
+          />
 
-      {/* EULA Modal */}
-      <Modal
-        visible={showEula}
-        animationType="slide"
-        transparent={true}
-        onRequestClose={() => setShowEula(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.modalContent, { backgroundColor: colors.background }]}>  
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.tint }]}>End User License Agreement</Text>
-              <TouchableOpacity onPress={() => setShowEula(false)}>
-                <Text style={[styles.closeButton, { color: colors.tint }]}>Close</Text>
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.modalScroll} contentContainerStyle={{ padding: 16 }}>
-              <Text style={[styles.modalText, { color: colors.text }]}>{`
+          {mode === 'signup' && (
+            <TouchableOpacity
+              style={styles.eulaRow}
+              onPress={() => setEulaChecked(!eulaChecked)}
+              activeOpacity={0.7}
+            >
+              <View style={[styles.checkbox, eulaChecked && { backgroundColor: colors.tint, borderColor: colors.tint }]}> 
+                {eulaChecked && <Check size={16} color="#fff" />}
+              </View>
+              <Text style={[styles.eulaText, { color: colors.text }]}>by checking this box you agree to the <Text style={[styles.eulaLink, { color: colors.tint }]} onPress={(e) => { e.stopPropagation(); setShowEula(true); }}>EULA</Text></Text>
+            </TouchableOpacity>
+          )}
+
+          <TouchableOpacity
+            style={[styles.button, styles.signInButton, loading && styles.buttonDisabled, { backgroundColor: colors.button }]}
+            onPress={mode === 'signin' ? signInWithEmail : signUpWithEmail}
+            disabled={loading || (mode === 'signup' && !eulaChecked)}>
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={styles.buttonText}>
+                {mode === 'signin' ? 'Sign In' : 'Sign Up'}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.switchModeButton}
+            onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}>
+            <Text style={[styles.switchModeText, { color: colors.tint }]}>
+              {mode === 'signin' ? 'Need an account? Sign Up' : 'Already have an account? Sign In'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* EULA Modal */}
+        <Modal
+          visible={showEula}
+          animationType="slide"
+          transparent={true}
+          onRequestClose={() => setShowEula(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <View style={[styles.modalContent, { backgroundColor: colors.background }]}>  
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.tint }]}>End User License Agreement</Text>
+                <TouchableOpacity onPress={() => setShowEula(false)}>
+                  <Text style={[styles.closeButton, { color: colors.tint }]}>Close</Text>
+                </TouchableOpacity>
+              </View>
+              <ScrollView style={styles.modalScroll} contentContainerStyle={{ padding: 16 }}>
+                <Text style={[styles.modalText, { color: colors.text }]}>{`
 END USER LICENSE AGREEMENT (EULA)
 
 This End User License Agreement ("Agreement") is a legal agreement between you and Gymsta ("the App"). By using the App, you agree to be bound by the terms of this Agreement.
@@ -192,35 +197,39 @@ You are granted a non-exclusive, non-transferable, revocable license to use the 
 2. THIRD-PARTY CONTENT
 The App may display, include, or make available third-party content (including data, information, applications, and other products or services) or provide links to third-party websites or services ("Third-Party Content"). You acknowledge and agree that Gymsta is not responsible for any Third-Party Content, including its accuracy, completeness, timeliness, validity, copyright compliance, legality, decency, quality, or any other aspect thereof. Gymsta does not assume and will not have any liability or responsibility to you or any other person or entity for any Third-Party Content.
 
-3. RESTRICTIONS
+3. ZERO TOLERANCE FOR OBJECTIONABLE CONTENT AND ABUSIVE USERS
+You agree that you will not post, upload, share, or otherwise make available any content that is objectionable, offensive, abusive, harassing, threatening, defamatory, obscene, or otherwise inappropriate. Gymsta maintains a strict zero-tolerance policy for objectionable content and abusive users. Any user found to be engaging in such behavior may have their account suspended or terminated without notice, and any such content may be removed at the sole discretion of Gymsta.
+
+4. RESTRICTIONS
 You may not:
 - Copy, modify, or create derivative works of the App;
 - Reverse engineer, decompile, or disassemble the App;
 - Remove, alter, or obscure any proprietary notices;
 - Use the App for any unlawful purpose.
 
-4. INTELLECTUAL PROPERTY
+5. INTELLECTUAL PROPERTY
 All rights, title, and interest in and to the App (excluding Third-Party Content) are owned by Gymsta and its licensors.
 
-5. TERMINATION
+6. TERMINATION
 This Agreement is effective until terminated by you or Gymsta. Your rights under this Agreement will terminate automatically if you fail to comply with any term(s) of this Agreement.
 
-6. DISCLAIMER OF WARRANTIES
+7. DISCLAIMER OF WARRANTIES
 The App is provided "AS IS" and "AS AVAILABLE" without warranty of any kind. Gymsta disclaims all warranties, express or implied, including but not limited to merchantability, fitness for a particular purpose, and non-infringement.
 
-7. LIMITATION OF LIABILITY
+8. LIMITATION OF LIABILITY
 To the maximum extent permitted by law, Gymsta shall not be liable for any damages arising out of or in connection with your use or inability to use the App or any Third-Party Content.
 
-8. GOVERNING LAW
+9. GOVERNING LAW
 This Agreement shall be governed by and construed in accordance with the laws of your jurisdiction.
 
 By using the App, you acknowledge that you have read, understood, and agree to be bound by this Agreement.
 `}</Text>
-            </ScrollView>
+              </ScrollView>
+            </View>
           </View>
-        </View>
-      </Modal>
-    </View>
+        </Modal>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -320,10 +329,7 @@ const styles = StyleSheet.create({
     maxHeight: '90%',
     borderRadius: 16,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    boxShadow: '0px 2px 3.84px rgba(0, 0, 0, 0.25)',
     elevation: 5,
   },
   modalHeader: {
@@ -343,7 +349,9 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   modalScroll: {
-    flex: 1,
+    // Removed flex: 1 to fix modal content not showing on mobile
+    // Optionally, add maxHeight for long EULA text
+    // maxHeight: '80%',
   },
   modalText: {
     fontSize: 15,

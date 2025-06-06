@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, ActivityIndicator, Modal, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Image, ActivityIndicator, Modal, Alert, Platform } from 'react-native';
 import { Search, ShoppingBag, LayoutGrid, Camera, CircleAlert as AlertCircle } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
@@ -142,13 +142,32 @@ export default function MarketplaceScreen() {
       }
 
       const fileName = `${user.id}/${Date.now()}.jpg`;
-      const response = await fetch(productImage);
-      const blob = await response.blob();
-      
-      const { error: uploadError, data } = await supabase.storage
-        .from('products')
-        .upload(fileName, blob);
-
+      let uploadError;
+      if (Platform.OS === 'web') {
+        const response = await fetch(productImage);
+        const blob = await response.blob();
+        ({ error: uploadError } = await supabase.storage
+          .from('products')
+          .upload(fileName, blob, {
+            contentType: 'image/jpeg',
+            cacheControl: '3600',
+            upsert: false
+          }));
+      } else {
+        const formData = new FormData();
+        formData.append('file', {
+          uri: productImage,
+          name: fileName,
+          type: 'image/jpeg',
+        } as any);
+        ({ error: uploadError } = await supabase.storage
+          .from('products')
+          .upload(fileName, formData, {
+            contentType: 'multipart/form-data',
+            cacheControl: '3600',
+            upsert: false
+          }));
+      }
       if (uploadError) throw uploadError;
 
       const { data: { publicUrl } } = supabase.storage
@@ -188,7 +207,9 @@ export default function MarketplaceScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.background }]}>
-        <Text style={[styles.logo, { color: colors.tint }]}>Gymsta</Text>
+        <TouchableOpacity onPress={() => router.push('/')}>
+          <Text style={[styles.logo, { color: colors.tint }]}>Gymsta</Text>
+        </TouchableOpacity>
         <TouchableOpacity
           style={styles.toggleContainer}
           onPress={() => setMode(mode === 'buyer' ? 'seller' : 'buyer')}>
@@ -473,9 +494,7 @@ const styles = StyleSheet.create({
     width: 200,
     marginRight: 15,
     borderRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   featuredImage: {
@@ -496,9 +515,7 @@ const styles = StyleSheet.create({
   productCard: {
     width: '47%',
     borderRadius: 10,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   productImage: {
@@ -620,13 +637,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 25,
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    boxShadow: '0px 2px 3.84px rgba(0, 0, 0, 0.25)',
     elevation: 5,
   },
   modalIconContainer: {

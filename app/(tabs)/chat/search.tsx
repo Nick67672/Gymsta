@@ -26,7 +26,7 @@ export default function SearchScreen() {
 
   const searchUsers = async (query: string) => {
     if (!isAuthenticated) {
-      showAuthModal();
+      router.push('/auth');
       return;
     }
     
@@ -61,7 +61,7 @@ export default function SearchScreen() {
 
   const handleUserPress = (user: User) => {
     if (!isAuthenticated) {
-      showAuthModal();
+      router.push('/auth');
       return;
     }
     

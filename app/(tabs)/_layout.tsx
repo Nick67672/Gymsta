@@ -1,10 +1,10 @@
 import { Tabs } from 'expo-router';
 import { Chrome as Home, MessageSquare, SquarePlus as PlusSquare, ShoppingBag, User, Dumbbell } from 'lucide-react-native';
-import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import Colors from '@/constants/Colors';
+import { pickImageFromLibrary } from '@/lib/imagePickerUtils';
 
 export default function TabLayout() {
   const { theme } = useTheme();
@@ -18,30 +18,21 @@ export default function TabLayout() {
     }
     
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      
-      if (status !== 'granted') {
-        alert('Permission to access gallery was denied');
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      const imageUri = await pickImageFromLibrary({
         allowsEditing: true,
-        aspect: [4, 3],
+        aspect: [1, 1],
         quality: 1,
       });
 
-      if (!result.canceled && result.assets[0]) {
+      if (imageUri) {
         // Navigate to the create post screen with the selected image
         router.push({
           pathname: "/upload",
-          params: { imageUri: result.assets[0].uri }
+          params: { imageUri }
         });
       }
     } catch (err) {
       console.error('Error picking image:', err);
-      alert('Failed to pick image');
     }
   };
 

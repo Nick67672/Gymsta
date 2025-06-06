@@ -4,6 +4,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { MessageSquare, MoreVertical } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
+import { useBlocking } from '@/context/BlockingContext';
 import Colors from '@/constants/Colors';
 
 interface Profile {
@@ -33,6 +35,8 @@ export default function UserProfileScreen() {
   const router = useRouter();
   const { theme } = useTheme();
   const colors = Colors[theme];
+  const { isAuthenticated, showAuthModal } = useAuth();
+  const { blockUser, isUserBlocked } = useBlocking();
   
   const [profile, setProfile] = useState<Profile | null>(null);
   const [posts, setPosts] = useState<Post[]>([]);
@@ -42,6 +46,8 @@ export default function UserProfileScreen() {
   const [chatLoading, setChatLoading] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  const [blocking, setBlocking] = useState(false);
+  const [reporting, setReporting] = useState(false);
 
   useEffect(() => {
     // Get current user's ID
@@ -232,6 +238,72 @@ export default function UserProfileScreen() {
     }
   };
 
+  const handleBlockUser = async () => {
+    if (!profile) return;
+    
+    try {
+      setBlocking(true);
+      setShowMenu(false);
+      
+      await blockUser(profile.id);
+      
+      Alert.alert(
+        'User Blocked', 
+        `You have blocked ${profile.username}. They will no longer be able to message you, and you won't see their posts.`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate back to avoid showing blocked user's profile
+              router.back();
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error blocking user:', error);
+      Alert.alert('Error', 'Failed to block user. Please try again.');
+    } finally {
+      setBlocking(false);
+    }
+  };
+
+  const handleReportUser = async () => {
+    if (!profile) return;
+    
+    try {
+      setReporting(true);
+      setShowMenu(false);
+      
+      // Update the is_reported column to true in the profiles table
+      const { error: reportError } = await supabase
+        .from('profiles')
+        .update({ is_reported: true })
+        .eq('id', profile.id);
+
+      if (reportError) throw reportError;
+      
+      Alert.alert(
+        'User Reported', 
+        `You have reported ${profile.username}. Our team will review this report and take appropriate action.`,
+        [
+          {
+            text: 'OK',
+            onPress: () => {
+              // Navigate back after reporting
+              router.back();
+            }
+          }
+        ]
+      );
+    } catch (error) {
+      console.error('Error reporting user:', error);
+      Alert.alert('Error', 'Failed to report user. Please try again.');
+    } finally {
+      setReporting(false);
+    }
+  };
+
   // Load profile when username changes
   useEffect(() => {
     if (username) {
@@ -403,8 +475,27 @@ export default function UserProfileScreen() {
       >
         <TouchableOpacity style={styles.menuOverlay} activeOpacity={1} onPress={() => setShowMenu(false)}>
           <View style={styles.menuPopup}>
-            <TouchableOpacity style={styles.blockButton} onPress={() => { setShowMenu(false); Alert.alert('Blocked', 'User has been blocked.'); }}>
-              <Text style={styles.blockButtonText}>Block User</Text>
+            <TouchableOpacity 
+              style={[styles.blockButton, blocking && styles.buttonDisabled]} 
+              onPress={handleBlockUser}
+              disabled={blocking}
+            >
+              {blocking ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.blockButtonText}>Block User</Text>
+              )}
+            </TouchableOpacity>
+            <TouchableOpacity 
+              style={[styles.reportButton, reporting && styles.buttonDisabled]}
+              onPress={handleReportUser}
+              disabled={reporting}
+            >
+              {reporting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Text style={styles.reportButtonText}>Report User</Text>
+              )}
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
@@ -591,6 +682,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   blockButtonText: {
+    color: '#fff',
+    fontWeight: '600',
+  },
+  reportButton: {
+    backgroundColor: '#DC3545',
+    padding: 10,
+    borderRadius: 5,
+    alignItems: 'center',
+    marginTop: 10,
+  },
+  reportButtonText: {
     color: '#fff',
     fontWeight: '600',
   },

@@ -5,6 +5,7 @@ import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
+import { useBlocking } from '@/context/BlockingContext';
 import Colors from '@/constants/Colors';
 import StoryViewer from '@/components/StoryViewer';
 
@@ -41,6 +42,7 @@ export default function ChatScreen() {
   const { theme } = useTheme();
   const colors = Colors[theme];
   const { isAuthenticated, showAuthModal } = useAuth();
+  const { blockedUserIds } = useBlocking();
   
   const [chats, setChats] = useState<ChatPreview[]>([]);
   const [loading, setLoading] = useState(true);
@@ -54,7 +56,6 @@ export default function ChatScreen() {
     // Check if user is authenticated
     if (!isAuthenticated) {
       setLoading(false);
-      showAuthModal();
       return;
     }
 
@@ -111,7 +112,7 @@ export default function ChatScreen() {
 
   const loadStories = async (userId: string) => {
     if (!isAuthenticated) {
-      showAuthModal();
+      router.push('/auth');
       return;
     }
     
@@ -175,9 +176,16 @@ export default function ChatScreen() {
             .filter(profile => profile.id !== currentUserId)
         }));
 
+        // Filter out chats with blocked users
+        const nonBlockedChats = transformedChats.filter(chat => 
+          !chat.participants.some(participant => 
+            blockedUserIds.includes(participant.id)
+          )
+        );
+
         // Now fetch the most recent message for each chat
         const chatsWithRecentMessages = await Promise.all(
-          transformedChats.map(async (chat) => {
+          nonBlockedChats.map(async (chat) => {
             const { data: messages, error: messagesError } = await supabase
               .from('a_chat_messages')
               .select('message, created_at')
@@ -320,7 +328,7 @@ export default function ChatScreen() {
 
   const handleNewChat = () => {
     if (!isAuthenticated) {
-      showAuthModal();
+      router.push('/auth');
       return;
     }
     router.push('/chat/search');
@@ -595,13 +603,7 @@ const styles = StyleSheet.create({
     borderRadius: 30,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
+    boxShadow: '0px 2px 3.84px rgba(0, 0, 0, 0.25)',
     elevation: 5,
   },
 });

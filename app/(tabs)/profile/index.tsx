@@ -7,6 +7,7 @@ import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
 import StoryViewer from '@/components/StoryViewer';
 import { useTheme } from '@/context/ThemeContext';
+import { useAuth } from '@/context/AuthContext';
 import Colors from '@/constants/Colors';
 
 interface Story {
@@ -48,6 +49,7 @@ interface Post {
 export default function ProfileScreen() {
   const { theme } = useTheme();
   const colors = Colors[theme];
+  const { isAuthenticated } = useAuth();
   
   const [profile, setProfile] = useState<Profile | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
@@ -62,11 +64,17 @@ export default function ProfileScreen() {
   const [loadingProducts, setLoadingProducts] = useState(false);
 
   const loadProfile = async () => {
+    // Check if user is authenticated first
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (!user) {
-        router.replace('/');
+        setLoading(false);
         return;
       }
 
@@ -151,10 +159,10 @@ export default function ProfileScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        mediaTypes: ['images'],
         allowsEditing: true,
-        quality: 1,
         aspect: [1, 1],
+        quality: 1,
       });
 
       if (!result.canceled && result.assets[0]) {
@@ -299,6 +307,28 @@ export default function ProfileScreen() {
     );
   }
 
+  // Show sign-in interface for non-authenticated users
+  if (!isAuthenticated) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={[styles.header, { backgroundColor: colors.background }]}>
+          <TouchableOpacity onPress={() => router.push('/')}>
+            <Text style={[styles.logo, { color: colors.tint }]}>Gymsta</Text>
+          </TouchableOpacity>
+        </View>
+        
+        <View style={styles.signInContainer}>
+          <TouchableOpacity
+            style={[styles.signInButton, { backgroundColor: colors.tint }]}
+            onPress={() => router.push('/auth')}
+          >
+            <Text style={styles.signInButtonText}>Sign In</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
   if (error || !profile) {
     return (
       <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
@@ -310,7 +340,9 @@ export default function ProfileScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.background }]}>
-        <Text style={[styles.logo, { color: colors.tint }]}>Gymsta</Text>
+        <TouchableOpacity onPress={() => router.push('/')}>
+          <Text style={[styles.logo, { color: colors.tint }]}>Gymsta</Text>
+        </TouchableOpacity>
         <TouchableOpacity 
           style={styles.settingsButton} 
           onPress={navigateToSettings}>
@@ -509,10 +541,7 @@ const styles = StyleSheet.create({
     marginVertical: 20,
     padding: 3,
     borderRadius: 45,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.2)',
     elevation: 5,
     position: 'relative',
   },
@@ -658,9 +687,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     borderRadius: 12,
     overflow: 'hidden',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
+    boxShadow: '0px 2px 4px rgba(0, 0, 0, 0.1)',
     elevation: 3,
   },
   productImage: {
@@ -684,5 +711,20 @@ const styles = StyleSheet.create({
   productDescription: {
     fontSize: 14,
     lineHeight: 20,
+  },
+  signInContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  signInButton: {
+    padding: 16,
+    borderRadius: 20,
+    backgroundColor: '#3B82F6',
+  },
+  signInButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
   },
 });

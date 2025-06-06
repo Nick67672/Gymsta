@@ -1,11 +1,13 @@
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, Image, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { View, Text, StyleSheet, Image, TouchableOpacity, TextInput, ActivityIndicator, ScrollView, KeyboardAvoidingView, Platform, Alert } from 'react-native';
 import { ArrowLeft, Send, CircleCheck as CheckCircle2 } from 'lucide-react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
+import { useBlocking } from '@/context/BlockingContext';
 import Colors from '@/constants/Colors';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Message {
   id: string;
@@ -26,6 +28,8 @@ export default function UserProfileScreen() {
   const { theme } = useTheme();
   const colors = Colors[theme];
   const { isAuthenticated, showAuthModal } = useAuth();
+  const { isUserBlocked } = useBlocking();
+  const insets = useSafeAreaInsets();
   
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -36,14 +40,15 @@ export default function UserProfileScreen() {
   const [chatId, setChatId] = useState<string | null>(null);
   const [recipientId, setRecipientId] = useState<string | null>(null);
   const [recipientProfile, setRecipientProfile] = useState<Profile | null>(null);
+  const [isBlocked, setIsBlocked] = useState(false);
+  const [blockedByRecipient, setBlockedByRecipient] = useState(false);
   const scrollViewRef = useRef<ScrollView>(null);
 
   useEffect(() => {
     // Check if user is authenticated
     if (!isAuthenticated) {
       setLoading(false);
-      showAuthModal();
-      router.replace('/chat');
+      router.replace('/auth');
       return;
     }
     
@@ -89,6 +94,44 @@ export default function UserProfileScreen() {
           is_verified: recipient.is_verified
         });
 
+        // Check if user is blocked or has blocked the recipient
+        const userBlocked = isUserBlocked(recipient.id);
+        setIsBlocked(userBlocked);
+
+        // Check if recipient has blocked the current user
+        const { data: blockedByData, error: blockedByError } = await supabase
+          .from('blocked_users')
+          .select('id')
+          .eq('blocker_id', recipient.id)
+          .eq('blocked_id', currentUserId)
+          .maybeSingle();
+
+        if (blockedByError && blockedByError.code !== '42P01') {
+          console.error('Error checking blocked status:', blockedByError);
+        }
+
+        const blockedByRecipientStatus = !!blockedByData;
+        setBlockedByRecipient(blockedByRecipientStatus);
+
+        // If blocked in either direction, show alert and return to chat list
+        if (userBlocked || blockedByRecipientStatus) {
+          Alert.alert(
+            'Unable to Message',
+            userBlocked 
+              ? 'You have blocked this user. Unblock them to send messages.'
+              : 'This user has blocked you and you cannot send them messages.',
+            [
+              {
+                text: 'OK',
+                onPress: () => router.replace('/chat')
+              }
+            ]
+          );
+          setLoading(false);
+          return;
+        }
+
+        // Continue with loading chat if not blocked
         // First, check if there's an existing chat where both users are participants
         const { data: existingChats, error: chatsError } = await supabase
           .from('a_chat_users')
@@ -123,7 +166,7 @@ export default function UserProfileScreen() {
     };
 
     loadChat();
-  }, [currentUserId, username, isAuthenticated]);
+  }, [currentUserId, username, isAuthenticated, isUserBlocked]);
 
   const loadMessages = async (chat_id: string) => {
     try {
@@ -137,9 +180,19 @@ export default function UserProfileScreen() {
       setMessages(messages || []);
       
       // Scroll to bottom after messages load
-      setTimeout(() => {
-        scrollViewRef.current?.scrollToEnd({ animated: false });
-      }, 100);
+      if (Platform.OS === 'ios') {
+        requestAnimationFrame(() => {
+          if (scrollViewRef.current) {
+            scrollViewRef.current.scrollToEnd({ animated: false });
+          }
+        });
+      } else {
+        setTimeout(() => {
+          if (scrollViewRef.current) {
+            scrollViewRef.current.scrollToEnd({ animated: false });
+          }
+        }, 100);
+      }
     } catch (err) {
       console.error('Error loading messages:', err);
     }
@@ -147,6 +200,17 @@ export default function UserProfileScreen() {
 
   const handleSend = async () => {
     if (!message.trim() || sending || !currentUserId || !recipientId || !isAuthenticated) return;
+    
+    // Double-check blocking status before sending
+    if (isBlocked || blockedByRecipient) {
+      Alert.alert(
+        'Unable to Send Message',
+        isBlocked 
+          ? 'You have blocked this user. Unblock them to send messages.'
+          : 'This user has blocked you and you cannot send them messages.'
+      );
+      return;
+    }
 
     setSending(true);
     setError(null);
@@ -216,9 +280,19 @@ export default function UserProfileScreen() {
       if (newMessage) {
         setMessages(prev => [...prev, newMessage]);
         // Scroll to bottom after new message
-        setTimeout(() => {
-          scrollViewRef.current?.scrollToEnd({ animated: true });
-        }, 100);
+        if (Platform.OS === 'ios') {
+          requestAnimationFrame(() => {
+            if (scrollViewRef.current) {
+              scrollViewRef.current.scrollToEnd({ animated: true });
+            }
+          });
+        } else {
+          setTimeout(() => {
+            if (scrollViewRef.current) {
+              scrollViewRef.current.scrollToEnd({ animated: true });
+            }
+          }, 100);
+        }
       }
 
       // Clear the input
@@ -235,15 +309,47 @@ export default function UserProfileScreen() {
     return null; // Will be redirected in useEffect
   }
 
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.primary} />
+      </View>
+    );
+  }
+
+  if (isBlocked || blockedByRecipient) {
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <View style={styles.header}>
+          <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
+            <ArrowLeft size={24} color={colors.text} />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: colors.text }]}>
+            {isBlocked ? 'User Blocked' : 'Cannot Message'}
+          </Text>
+        </View>
+        <View style={styles.blockedContainer}>
+          <Text style={[styles.blockedText, { color: colors.text }]}>
+            {isBlocked 
+              ? 'You have blocked this user. Unblock them to send messages.'
+              : 'This user has blocked you and you cannot send them messages.'
+            }
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
   return (
     <KeyboardAvoidingView 
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
     >
       <View style={[styles.header, { 
         borderBottomColor: colors.border,
-        backgroundColor: colors.background
+        backgroundColor: colors.background,
+        paddingTop: insets.top + 10
       }]}>
         <TouchableOpacity
           style={styles.backButton}
@@ -314,7 +420,8 @@ export default function UserProfileScreen() {
 
       <View style={[styles.inputContainer, { 
         borderTopColor: colors.border,
-        backgroundColor: colors.card
+        backgroundColor: colors.card,
+        paddingBottom: Math.max(insets.bottom, 15)
       }]}>
         <TextInput
           style={[styles.input, { 
@@ -354,7 +461,6 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingTop: 30,
     paddingHorizontal: 15,
     paddingBottom: 15,
     borderBottomWidth: 1,
@@ -436,7 +542,8 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    padding: 15,
+    paddingHorizontal: 15,
+    paddingTop: 15,
     borderTopWidth: 1,
   },
   input: {
@@ -457,5 +564,17 @@ const styles = StyleSheet.create({
   },
   sendButtonDisabled: {
     opacity: 0.7,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+  },
+  blockedContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  blockedText: {
+    textAlign: 'center',
   },
 });

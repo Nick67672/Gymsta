@@ -66,7 +66,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const handleSignUp = () => {
     setModalVisible(false);
-    router.push('/auth?mode=signup');
+    router.push('/auth');
   };
 
   return (
@@ -125,41 +125,40 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
   },
   modalContent: {
-    width: '80%',
-    borderRadius: 16,
+    width: '85%',
+    minHeight: 280,
+    maxHeight: '70%',
+    borderRadius: 20,
     padding: 24,
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
+    overflow: 'hidden',
+    boxShadow: '0px 4px 6px rgba(0, 0, 0, 0.3)',
+    elevation: 8,
   },
   modalTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    marginBottom: 16,
+    marginBottom: 12,
+    textAlign: 'center',
   },
   modalText: {
     fontSize: 16,
     textAlign: 'center',
-    marginBottom: 24,
+    marginBottom: 32,
+    lineHeight: 22,
   },
   buttonContainer: {
     flexDirection: 'row',
     width: '100%',
     justifyContent: 'space-between',
-    marginBottom: 16,
+    marginBottom: 20,
     gap: 12,
   },
   button: {
     flex: 1,
-    padding: 14,
+    padding: 16,
     borderRadius: 12,
     alignItems: 'center',
   },
@@ -180,9 +179,11 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   cancelButton: {
-    padding: 10,
+    padding: 12,
+    alignItems: 'center',
   },
   cancelText: {
-    fontSize: 14,
+    fontSize: 16,
+    fontWeight: '500',
   },
 });

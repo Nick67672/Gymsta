@@ -10,6 +10,7 @@ import StoryViewer from '@/components/StoryViewer';
 import WorkoutDetailModal from '@/components/WorkoutDetailModal';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
+import { useBlocking } from '@/context/BlockingContext';
 import Colors from '@/constants/Colors';
 
 interface Story {
@@ -61,6 +62,7 @@ export default function HomeScreen() {
   const { theme } = useTheme();
   const colors = Colors[theme];
   const { isAuthenticated, showAuthModal } = useAuth();
+  const { blockedUserIds, blockingLoading } = useBlocking();
   
   const [activeTab, setActiveTab] = useState<'explore' | 'my-gym'>('explore');
   const [posts, setPosts] = useState<Post[]>([]);
@@ -78,6 +80,7 @@ export default function HomeScreen() {
   const [showWorkoutModal, setShowWorkoutModal] = useState(false);
   const videoRefs = useRef<{ [key: string]: any }>({});
   const [flaggedPosts, setFlaggedPosts] = useState<{ [postId: string]: boolean }>({});
+  const [flagging, setFlagging] = useState<{ [postId: string]: boolean }>({});
   
   const screenWidth = Dimensions.get('window').width;
 
@@ -151,7 +154,7 @@ export default function HomeScreen() {
     }
   };
 
-  const loadPosts = async () => {
+  const loadPosts = useCallback(async () => {
     try {
       // Get current user's gym
       const { data: { user } } = await supabase.auth.getUser();
@@ -198,14 +201,19 @@ export default function HomeScreen() {
         media_type: post.media_type || 'image'
       }));
       
-      setPosts(postsWithMediaType);
+      // Filter out posts from blocked users
+      const filteredPosts = postsWithMediaType.filter(post => 
+        !blockedUserIds.includes(post.profiles.id)
+      );
+      
+      setPosts(filteredPosts);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load posts');
     } finally {
       setLoading(false);
       setRefreshing(false);
     }
-  };
+  }, [blockedUserIds]);
 
   const loadGymWorkouts = async () => {
     try {
@@ -337,6 +345,9 @@ export default function HomeScreen() {
   };
 
   useEffect(() => {
+    // Don't load posts until blocking context is ready
+    if (blockingLoading) return;
+    
     supabase.auth.getUser().then(({ data: { user } }) => {
       if (user) {
         setCurrentUserId(user.id);
@@ -381,11 +392,14 @@ export default function HomeScreen() {
             .single();
 
           if (!error && newPost) {
-            const postWithMediaType = {
-              ...newPost,
-              media_type: newPost.media_type || 'image'
-            };
-            setPosts(currentPosts => [postWithMediaType, ...currentPosts]);
+            // Only add post if user is not blocked
+            if (!blockedUserIds.includes(newPost.profiles.id)) {
+              const postWithMediaType = {
+                ...newPost,
+                media_type: newPost.media_type || 'image'
+              };
+              setPosts(currentPosts => [postWithMediaType, ...currentPosts]);
+            }
           }
         }
       )
@@ -424,7 +438,7 @@ export default function HomeScreen() {
       likesChannel.unsubscribe();
       storiesChannel.unsubscribe();
     };
-  }, []);
+  }, [loadPosts, blockingLoading, blockedUserIds]);
 
   const handleScroll = () => {
     if (playingVideo) {
@@ -455,7 +469,9 @@ export default function HomeScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.background }]}>
-        <Text style={[styles.logo, { color: colors.tint }]}>Gymsta</Text>
+        <TouchableOpacity onPress={() => router.push('/')}>
+          <Text style={[styles.logo, { color: colors.tint }]}>Gymsta</Text>
+        </TouchableOpacity>
         <View style={styles.headerButtons}>
           {!isAuthenticated && (
             <TouchableOpacity 
@@ -640,13 +656,28 @@ export default function HomeScreen() {
                         </View>
                         <View style={styles.likeContainer}>
                           <TouchableOpacity
-                            onPress={() => {
-                              setFlaggedPosts(prev => ({
-                                ...prev,
-                                [post.id]: !prev[post.id]
-                              }));
+                            onPress={async () => {
+                              if (flaggedPosts[post.id] || flagging[post.id]) return;
+                              setFlagging(prev => ({ ...prev, [post.id]: true }));
+                              try {
+                                const { error } = await supabase
+                                  .from('posts')
+                                  .update({ is_flagged: true })
+                                  .eq('id', post.id);
+                                if (!error) {
+                                  setFlaggedPosts(prev => ({ ...prev, [post.id]: true }));
+                                } else {
+                                  Alert.alert('Error', 'Failed to flag post.');
+                                }
+                              } catch (err) {
+                                Alert.alert('Error', 'Failed to flag post.');
+                              } finally {
+                                setFlagging(prev => ({ ...prev, [post.id]: false }));
+                              }
                             }}
-                            style={{ marginRight: 4 }}
+                            style={styles.flagButton}
+                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                            disabled={flaggedPosts[post.id] || flagging[post.id]}
                           >
                             <Flag size={20} color={flaggedPosts[post.id] ? '#FFA500' : '#888'} fill={flaggedPosts[post.id] ? '#FFA500' : 'none'} />
                           </TouchableOpacity>
@@ -783,13 +814,28 @@ export default function HomeScreen() {
                           </View>
                           <View style={styles.likeContainer}>
                             <TouchableOpacity
-                              onPress={() => {
-                                setFlaggedPosts(prev => ({
-                                  ...prev,
-                                  [post.id]: !prev[post.id]
-                                }));
+                              onPress={async () => {
+                                if (flaggedPosts[post.id] || flagging[post.id]) return;
+                                setFlagging(prev => ({ ...prev, [post.id]: true }));
+                                try {
+                                  const { error } = await supabase
+                                    .from('posts')
+                                    .update({ is_flagged: true })
+                                    .eq('id', post.id);
+                                  if (!error) {
+                                    setFlaggedPosts(prev => ({ ...prev, [post.id]: true }));
+                                  } else {
+                                    Alert.alert('Error', 'Failed to flag post.');
+                                  }
+                                } catch (err) {
+                                  Alert.alert('Error', 'Failed to flag post.');
+                                } finally {
+                                  setFlagging(prev => ({ ...prev, [post.id]: false }));
+                                }
                               }}
-                              style={{ marginRight: 4 }}
+                              style={styles.flagButton}
+                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                              disabled={flaggedPosts[post.id] || flagging[post.id]}
                             >
                               <Flag size={20} color={flaggedPosts[post.id] ? '#FFA500' : '#888'} fill={flaggedPosts[post.id] ? '#FFA500' : 'none'} />
                             </TouchableOpacity>
@@ -1069,6 +1115,11 @@ const styles = StyleSheet.create({
     gap: 8,
     marginLeft: 12,
     alignSelf: 'flex-start',
+  },
+  flagButton: {
+    padding: 8,
+    marginRight: 4,
+    borderRadius: 8,
   },
   likes: {
     fontSize: 14,
