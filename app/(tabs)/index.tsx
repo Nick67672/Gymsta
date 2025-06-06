@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, RefreshControl, Modal, ActivityIndicator, Dimensions, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { Plus, CircleCheck as CheckCircle2, Heart, Settings, X, Dumbbell, Pause, Play, LogIn, Flag } from 'lucide-react-native';
-import { Video, ResizeMode } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
@@ -81,6 +81,11 @@ export default function HomeScreen() {
   const videoRefs = useRef<{ [key: string]: any }>({});
   const [flaggedPosts, setFlaggedPosts] = useState<{ [postId: string]: boolean }>({});
   const [flagging, setFlagging] = useState<{ [postId: string]: boolean }>({});
+  const channelsRef = useRef<{
+    posts?: any;
+    likes?: any;
+    stories?: any;
+  }>({});
   
   const screenWidth = Dimensions.get('window').width;
 
@@ -357,8 +362,24 @@ export default function HomeScreen() {
     loadPosts();
     loadFollowing();
     loadGymWorkouts();
+  }, [blockingLoading, blockedUserIds]);
 
-    const postsChannel = supabase.channel('posts-channel')
+  // Separate useEffect for channel subscriptions to avoid multiple subscriptions
+  useEffect(() => {
+    if (blockingLoading) return;
+
+    // Clean up existing channels
+    if (channelsRef.current.posts) {
+      channelsRef.current.posts.unsubscribe();
+    }
+    if (channelsRef.current.likes) {
+      channelsRef.current.likes.unsubscribe();
+    }
+    if (channelsRef.current.stories) {
+      channelsRef.current.stories.unsubscribe();
+    }
+
+    const postsChannel = supabase.channel('posts-channel-' + Date.now())
       .on(
         'postgres_changes',
         {
@@ -392,20 +413,17 @@ export default function HomeScreen() {
             .single();
 
           if (!error && newPost) {
-            // Only add post if user is not blocked
-            if (!blockedUserIds.includes(newPost.profiles.id)) {
-              const postWithMediaType = {
-                ...newPost,
-                media_type: newPost.media_type || 'image'
-              };
-              setPosts(currentPosts => [postWithMediaType, ...currentPosts]);
-            }
+            const postWithMediaType = {
+              ...newPost,
+              media_type: newPost.media_type || 'image'
+            };
+            setPosts(currentPosts => [postWithMediaType, ...currentPosts]);
           }
         }
       )
       .subscribe();
 
-    const likesChannel = supabase.channel('likes-channel')
+    const likesChannel = supabase.channel('likes-channel-' + Date.now())
       .on(
         'postgres_changes',
         {
@@ -414,12 +432,13 @@ export default function HomeScreen() {
           table: 'likes'
         },
         () => {
+          // Reload posts when likes change
           loadPosts();
         }
       )
       .subscribe();
 
-    const storiesChannel = supabase.channel('stories-channel')
+    const storiesChannel = supabase.channel('stories-channel-' + Date.now())
       .on(
         'postgres_changes',
         {
@@ -433,12 +452,19 @@ export default function HomeScreen() {
       )
       .subscribe();
 
+    // Store channels in ref
+    channelsRef.current = {
+      posts: postsChannel,
+      likes: likesChannel,
+      stories: storiesChannel
+    };
+
     return () => {
       postsChannel.unsubscribe();
       likesChannel.unsubscribe();
       storiesChannel.unsubscribe();
     };
-  }, [loadPosts, blockingLoading, blockedUserIds]);
+  }, [blockingLoading]); // Only depend on blockingLoading
 
   const handleScroll = () => {
     if (playingVideo) {
@@ -603,11 +629,10 @@ export default function HomeScreen() {
                           activeOpacity={0.9}
                           onPress={() => toggleVideoPlayback(post.id)}
                         >
-                          <Video
+                          <VideoView
                             ref={ref => { videoRefs.current[post.id] = ref; }}
                             source={{ uri: post.image_url }}
                             style={styles.videoContent}
-                            resizeMode={ResizeMode.CONTAIN}
                             useNativeControls={false}
                             isLooping
                             shouldPlay={false}
@@ -761,11 +786,10 @@ export default function HomeScreen() {
                             activeOpacity={0.9}
                             onPress={() => toggleVideoPlayback(post.id)}
                           >
-                            <Video
+                            <VideoView
                               ref={ref => { videoRefs.current[post.id] = ref; }}
                               source={{ uri: post.image_url }}
                               style={styles.videoContent}
-                              resizeMode={ResizeMode.CONTAIN}
                               useNativeControls={false}
                               isLooping
                               shouldPlay={false}

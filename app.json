@@ -18,7 +18,9 @@
           "cameraRollPermission": "The app accesses your camera roll to let you select photos to share with your friends."
         }
       ],
-      "expo-web-browser"
+      "expo-web-browser",
+      "expo-video",
+      "expo-audio"
     ],
     "ios": {
       "bundleIdentifier": "com.vanta.gymsta",

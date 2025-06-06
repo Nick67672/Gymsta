@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Image, TouchableOpacity, ActivityIndicator, Scr
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Heart, Pause, Play, MoreVertical } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
-import { Video, ResizeMode } from 'expo-av';
+import { VideoView, useVideoPlayer } from 'expo-video';
 import { useAuth } from '@/context/AuthContext';
 import { useBlocking } from '@/context/BlockingContext';
 
@@ -36,7 +36,10 @@ export default function PostDetailScreen() {
   const [likeLoading, setLikeLoading] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isPlaying, setIsPlaying] = useState(false);
-  const videoRef = useRef<Video>(null);
+  const videoPlayer = post?.media_type === 'video' ? useVideoPlayer(post.image_url, player => {
+    player.loop = true;
+    player.play();
+  }) : null;
   const [showMenu, setShowMenu] = useState(false);
   const [blocking, setBlocking] = useState(false);
   
@@ -182,11 +185,11 @@ export default function PostDetailScreen() {
   };
 
   const togglePlayback = () => {
-    if (videoRef.current) {
+    if (videoPlayer) {
       if (isPlaying) {
-        videoRef.current.pauseAsync();
+        videoPlayer.pause();
       } else {
-        videoRef.current.playAsync();
+        videoPlayer.play();
       }
     }
   };
@@ -305,31 +308,27 @@ export default function PostDetailScreen() {
 
         {post.media_type === 'video' ? (
           <View style={styles.videoWrapper}>
-            <View style={styles.videoBackdrop} />
-            <TouchableOpacity 
-              style={styles.videoContainer}
-              activeOpacity={0.9}
-              onPress={togglePlayback}
-            >
-              <Video
-                ref={videoRef}
-                source={{ uri: post.image_url }}
+            {videoPlayer && (
+              <VideoView
+                player={videoPlayer}
                 style={styles.videoContent}
-                resizeMode={ResizeMode.CONTAIN}
-                useNativeControls={false}
-                isLooping
-                shouldPlay={false}
-                onPlaybackStatusUpdate={status => {
-                  setIsPlaying(status?.isPlaying || false);
+                contentFit="contain"
+                allowsFullscreen={false}
+                allowsPictureInPicture={false}
+                onPlaybackStatusUpdate={(status: any) => {
+                  setIsPlaying(status.isLoaded && !status.didJustFinish);
                 }}
               />
-              <View style={styles.videoPlayButton}>
-                {isPlaying ? (
-                  <Pause size={40} color="#fff" />
-                ) : (
-                  <Play size={40} color="#fff" />
-                )}
-              </View>
+            )}
+            <TouchableOpacity
+              style={styles.playButton}
+              onPress={togglePlayback}
+            >
+              {isPlaying ? (
+                <Pause color="white" size={40} />
+              ) : (
+                <Play color="white" size={40} />
+              )}
             </TouchableOpacity>
           </View>
         ) : (
@@ -565,5 +564,15 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontWeight: '600',
     textAlign: 'center',
+  },
+  playButton: {
+    position: 'absolute',
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
+    borderRadius: 30,
+    width: 60,
+    height: 60,
+    zIndex: 3,
   },
 });
