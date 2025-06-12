@@ -2,12 +2,12 @@
   "expo": {
     "name": "Gymsta",
     "slug": "gymsta",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "gymsta",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
+    "newArchEnabled": false,
     "plugins": [
       "expo-router",
       [
@@ -24,7 +24,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.vanta.gymsta",
-      "buildNumber": "23",
+      "buildNumber": "32",
       "supportsTablet": true,
       "config": {
         "usesNonExemptEncryption": false
@@ -34,8 +34,7 @@
         "NSCameraUsageDescription": "This app uses the camera to let you take photos to share with your friends.",
         "NSPhotoLibraryAddUsageDescription": "This app saves photos to your photo library.",
         "NSMicrophoneUsageDescription": "This app uses the microphone for video recording features."
-      },
-      "teamId": "5W23W64DY5"
+      }
     },
     "web": {
       "bundler": "metro",

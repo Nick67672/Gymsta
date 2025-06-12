@@ -7,8 +7,15 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  throw new Error('Missing Supabase environment variables');
+  console.error('Missing Supabase environment variables:', {
+    hasUrl: !!supabaseUrl,
+    hasKey: !!supabaseAnonKey,
+    nodeEnv: process.env.NODE_ENV,
+  });
+  throw new Error('Missing Supabase environment variables - check your .env file and build configuration');
 }
+
+console.log('Initializing Supabase client...'); // Debug log for production builds
 
 export const supabase = createClient<Database>(
   supabaseUrl,

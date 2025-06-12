@@ -7,7 +7,6 @@ import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useBlocking } from '@/context/BlockingContext';
 import Colors from '@/constants/Colors';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface Message {
   id: string;
@@ -29,7 +28,6 @@ export default function UserProfileScreen() {
   const colors = Colors[theme];
   const { isAuthenticated, showAuthModal } = useAuth();
   const { isUserBlocked } = useBlocking();
-  const insets = useSafeAreaInsets();
   
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
@@ -312,7 +310,7 @@ export default function UserProfileScreen() {
   if (loading) {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.primary} />
+        <ActivityIndicator size="large" color={colors.tint} />
       </View>
     );
   }
@@ -344,12 +342,12 @@ export default function UserProfileScreen() {
     <KeyboardAvoidingView 
       style={[styles.container, { backgroundColor: colors.background }]}
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      keyboardVerticalOffset={Platform.OS === 'ios' ? insets.top : 0}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
+      enabled
     >
       <View style={[styles.header, { 
         borderBottomColor: colors.border,
-        backgroundColor: colors.background,
-        paddingTop: insets.top + 10
+        backgroundColor: colors.background
       }]}>
         <TouchableOpacity
           style={styles.backButton}
@@ -420,8 +418,7 @@ export default function UserProfileScreen() {
 
       <View style={[styles.inputContainer, { 
         borderTopColor: colors.border,
-        backgroundColor: colors.card,
-        paddingBottom: Math.max(insets.bottom, 15)
+        backgroundColor: colors.card
       }]}>
         <TextInput
           style={[styles.input, { 
@@ -461,6 +458,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingTop: 30,
     paddingHorizontal: 15,
     paddingBottom: 15,
     borderBottomWidth: 1,
@@ -542,8 +540,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    paddingHorizontal: 15,
-    paddingTop: 15,
+    padding: 15,
     borderTopWidth: 1,
   },
   input: {

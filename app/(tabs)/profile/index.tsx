@@ -159,10 +159,10 @@ export default function ProfileScreen() {
       }
 
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ['images'],
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
-        aspect: [1, 1],
         quality: 1,
+        aspect: [1, 1],
       });
 
       if (!result.canceled && result.assets[0]) {

@@ -32,11 +32,34 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const colors = Colors[theme];
 
   useEffect(() => {
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setLoading(false);
-    });
+    let timeoutId: ReturnType<typeof setTimeout>;
+    
+    const initializeAuth = async () => {
+      try {
+        // Set a timeout to prevent infinite loading
+        timeoutId = setTimeout(() => {
+          console.warn('Auth initialization timeout - proceeding without session');
+          setLoading(false);
+        }, 10000); // 10 second timeout
+
+        // Get initial session
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
+        if (error) {
+          console.error('Error getting session:', error);
+        }
+        
+        setSession(session);
+        clearTimeout(timeoutId);
+        setLoading(false);
+      } catch (error) {
+        console.error('Failed to initialize auth:', error);
+        clearTimeout(timeoutId);
+        setLoading(false);
+      }
+    };
+
+    initializeAuth();
 
     // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
@@ -44,7 +67,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setLoading(false);
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      if (timeoutId) clearTimeout(timeoutId);
+      subscription.unsubscribe();
+    };
   }, []);
 
   const showAuthModal = () => {

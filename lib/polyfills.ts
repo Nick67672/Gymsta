@@ -2,19 +2,33 @@
 import 'react-native-url-polyfill/auto';
 import 'react-native-get-random-values';
 
+console.log('Loading polyfills...'); // Debug log
+
 // Buffer polyfill
 import { Buffer } from 'buffer';
-(global as any).Buffer = (global as any).Buffer || Buffer;
+if (typeof (global as any).Buffer === 'undefined') {
+  (global as any).Buffer = Buffer;
+  console.log('Buffer polyfill applied');
+}
 
 // Process polyfill
 import process from 'process';
-(global as any).process = (global as any).process || process;
+if (typeof (global as any).process === 'undefined') {
+  (global as any).process = process;
+  console.log('Process polyfill applied');
+}
 
 // Util polyfill
-(global as any).util = (global as any).util || require('util');
+if (typeof (global as any).util === 'undefined') {
+  (global as any).util = require('util');
+  console.log('Util polyfill applied');
+}
 
 // Events polyfill
-(global as any).events = (global as any).events || require('events');
+if (typeof (global as any).events === 'undefined') {
+  (global as any).events = require('events');
+  console.log('Events polyfill applied');
+}
 
 // EventSource polyfill (minimal implementation for SSE support)
 if (typeof (global as any).EventSource === 'undefined') {
@@ -30,4 +44,7 @@ if (typeof (global as any).EventSource === 'undefined') {
     static readonly OPEN = 1;
     static readonly CLOSED = 2;
   };
-} 
+  console.log('EventSource polyfill applied');
+}
+
+console.log('Polyfills loaded successfully'); 
