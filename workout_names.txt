@@ -1,0 +1,85 @@
+Bicycle Crunch
+Box Jump
+Box Squat (Barbell)
+Bulgarian Split Squat
+Burpee
+Cable Crossover
+Cable Crunch
+Bench Dip
+Bench Press (Barbell)
+Bench Press (Cable)
+Bench Press (Dumbbell)
+Bench Press (Smith Machine)
+Bench Press - Close Grip (Barbell)
+Bench Press - Wide Grip (Barbell)
+Bent Over One Arm Row (Dumbbell)
+Ab Wheel
+Aerobics
+Arnold Press (Dumbbell)
+Around the World
+Back Extension
+Back Extension (Machine)
+Ball Slams
+Battle Ropes
+Lateral Raise (Dumbbell)
+Lateral Raise (Machine)
+Leg Extension (Machine)
+Leg Press
+Lunge (Barbell)
+Lunge (Bodyweight)
+Lunge (Dumbbell)
+Lying Leg Curl (Machine)
+Kettlebell Turkish Get Up
+Kipping Pull Up
+Knee Raise (Captain's Chair)
+Kneeling Pulldown (Band)
+Knees to Elbows
+Lat Pulldown (Cable)
+Lat Pulldown (Machine)
+Lat Pulldown (Single Arm)
+Jackknife Sit Up
+Jump Rope
+Jump Shrug (Barbell)
+Jump Squat
+Jumping Jack
+Kettlebell Swing
+Incline Bench Press (Dumbbell)
+Incline Bench Press (Smith Machine)
+Incline Chest Fly (Dumbbell)
+Incline Chest Press (Machine)
+Incline Curl (Dumbbell)
+Incline Row (Dumbbell)
+Inverted Row (Bodyweight)
+Iso-Lateral Chest Press
+Handstand Push Up
+Hang Clean (Barbell)
+Hang Snatch (Barbell)
+Hanging Knee Raise
+Hanging Leg Raise
+High Knee Skips
+Hiking
+Hip Abductor (Machine)
+Glute Kickback (Machine)
+Goblet Squat (Kettlebell)
+Good Morning (Barbell)
+Hack Squat
+Hack Squat (Barbell)
+Hammer Curl (Band)
+Hammer Curl (Cable)
+Hammer Curl (Dumbbell)
+Deadlift (Band)
+Deadlift (Barbell)
+Deadlift (Dumbbell)
+Deadlift (Smith Machine)
+Deadlift High Pull (Barbell)
+Decline Bench Press (Barbell)
+Decline Bench Press (Dumbbell)
+Decline Bench Press (Smith Machine)
+Deficit Deadlift (Barbell)
+Elliptical Machine
+Face Pull (Cable)
+Finger Curls
+Flat Knee Raise
+Flat Leg Raise
+Floor Press (Barbell)
+

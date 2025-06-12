@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, ScrollView, Modal } from 'react-native';
 import { Plus, CircleCheck as CheckCircle2 } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -51,6 +51,14 @@ export default function ChatScreen() {
   const [following, setFollowing] = useState<Profile[]>([]);
   const [selectedStories, setSelectedStories] = useState<Story[]>([]);
   const [showingStories, setShowingStories] = useState(false);
+
+  // Keep references to active realtime channels so we can clean them up and
+  // avoid subscribing to the same channel instance multiple times.
+  const channelsRef = useRef<{
+    messages?: any;
+    chat?: any;
+    stories?: any;
+  }>({});
 
   useEffect(() => {
     // Check if user is authenticated
@@ -218,12 +226,29 @@ export default function ChatScreen() {
   useEffect(() => {
     if (!currentUserId || !isAuthenticated) return;
 
+    // Always load data on mount / when dependencies change
     loadChats();
     loadFollowing();
 
-    // Set up real-time subscription for new messages
-    const messagesSubscription = supabase
-      .channel('chat_messages')
+    // Clean up any previously created channels to avoid duplicate
+    // subscriptions which can trigger the `subscribe can only be called a
+    // single time per channel instance` error.
+    if (channelsRef.current.messages) {
+      channelsRef.current.messages.unsubscribe();
+    }
+    if (channelsRef.current.chat) {
+      channelsRef.current.chat.unsubscribe();
+    }
+    if (channelsRef.current.stories) {
+      channelsRef.current.stories.unsubscribe();
+    }
+
+    // Add a unique suffix to each channel name so that Supabase returns a new
+    // channel instance every time.
+    const uniqueSuffix = Date.now();
+
+    const messagesChannel = supabase
+      .channel(`chat_messages-${uniqueSuffix}`)
       .on(
         'postgres_changes',
         {
@@ -237,33 +262,30 @@ export default function ChatScreen() {
           const message = payload.new.message;
           const created_at = payload.new.created_at;
 
-          setChats(prevChats => 
-            prevChats.map(chat => {
-              if (chat.id === chatId) {
-                return {
-                  ...chat,
-                  last_message: message,
-                  recent_message: {
-                    message,
-                    created_at
-                  }
-                };
-              }
-              return chat;
-            }).sort((a, b) => {
-              // Sort chats by most recent message
-              const aDate = a.recent_message?.created_at || a.created_at;
-              const bDate = b.recent_message?.created_at || b.created_at;
-              return new Date(bDate).getTime() - new Date(aDate).getTime();
-            })
+          setChats(prevChats =>
+            prevChats
+              .map(chat => {
+                if (chat.id === chatId) {
+                  return {
+                    ...chat,
+                    last_message: message,
+                    recent_message: { message, created_at }
+                  };
+                }
+                return chat;
+              })
+              .sort((a, b) => {
+                const aDate = a.recent_message?.created_at || a.created_at;
+                const bDate = b.recent_message?.created_at || b.created_at;
+                return new Date(bDate).getTime() - new Date(aDate).getTime();
+              })
           );
         }
       )
       .subscribe();
 
-    // Set up real-time subscription for chat updates
-    const chatSubscription = supabase
-      .channel('chat_updates')
+    const chatChannel = supabase
+      .channel(`chat_updates-${uniqueSuffix}`)
       .on(
         'postgres_changes',
         {
@@ -277,9 +299,8 @@ export default function ChatScreen() {
       )
       .subscribe();
 
-    // Set up real-time subscription for stories
-    const storiesSubscription = supabase
-      .channel('stories_changes')
+    const storiesChannel = supabase
+      .channel(`stories_changes-${uniqueSuffix}`)
       .on(
         'postgres_changes',
         {
@@ -293,10 +314,17 @@ export default function ChatScreen() {
       )
       .subscribe();
 
+    // Store in ref so we can access them for cleanup next time
+    channelsRef.current = {
+      messages: messagesChannel,
+      chat: chatChannel,
+      stories: storiesChannel,
+    };
+
     return () => {
-      messagesSubscription.unsubscribe();
-      chatSubscription.unsubscribe();
-      storiesSubscription.unsubscribe();
+      messagesChannel.unsubscribe();
+      chatChannel.unsubscribe();
+      storiesChannel.unsubscribe();
     };
   }, [currentUserId, isAuthenticated]);
 

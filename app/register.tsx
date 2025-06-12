@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, ActivityIndicator, ScrollView, TouchableWithoutFeedback, Keyboard } from 'react-native';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/context/ThemeContext';
@@ -95,119 +95,124 @@ export default function RegisterScreen() {
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <Text style={[styles.title, { color: colors.tint }]}>Complete Your Profile</Text>
-      
-      {error && (
-        <View style={[styles.errorContainer, { backgroundColor: colors.error + '20' }]}>
-          <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
-        </View>
-      )}
-      
-      <TextInput
-        style={[
-          styles.input, 
-          { 
-            borderColor: colors.border,
-            backgroundColor: colors.inputBackground,
-            color: colors.text
-          }
-        ]}
-        placeholder="Username"
-        placeholderTextColor={colors.textSecondary}
-        value={username}
-        onChangeText={setUsername}
-        autoCapitalize="none"
-        autoCorrect={false}
-        maxLength={30}
-      />
-      
-      <TextInput
-        style={[
-          styles.input,
-          styles.bioInput, 
-          { 
-            borderColor: colors.border,
-            backgroundColor: colors.inputBackground,
-            color: colors.text
-          }
-        ]}
-        placeholder="Bio (optional)"
-        placeholderTextColor={colors.textSecondary}
-        value={bio}
-        onChangeText={setBio}
-        multiline
-        numberOfLines={4}
-        maxLength={160}
-      />
-
-      <View style={styles.gymInputContainer}>
+    <TouchableWithoutFeedback onPress={() => {
+      Keyboard.dismiss();
+      setShowGymSuggestions(false);
+    }}>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <Text style={[styles.title, { color: colors.tint }]}>Complete Your Profile</Text>
+        
+        {error && (
+          <View style={[styles.errorContainer, { backgroundColor: colors.error + '20' }]}>
+            <Text style={[styles.errorText, { color: colors.error }]}>{error}</Text>
+          </View>
+        )}
+        
         <TextInput
           style={[
-            styles.input,
+            styles.input, 
             { 
               borderColor: colors.border,
               backgroundColor: colors.inputBackground,
-              color: colors.text,
-              marginBottom: showGymSuggestions && filteredGyms.length > 0 ? 0 : 16,
-              borderBottomLeftRadius: showGymSuggestions && filteredGyms.length > 0 ? 0 : 8,
-              borderBottomRightRadius: showGymSuggestions && filteredGyms.length > 0 ? 0 : 8
+              color: colors.text
             }
           ]}
-          placeholder="Gym (optional)"
+          placeholder="Username"
           placeholderTextColor={colors.textSecondary}
-          value={gym}
-          onChangeText={(text) => {
-            setGym(text);
-            setShowGymSuggestions(true);
-          }}
-          onFocus={() => setShowGymSuggestions(true)}
+          value={username}
+          onChangeText={setUsername}
+          autoCapitalize="none"
+          autoCorrect={false}
+          maxLength={30}
         />
         
-        {showGymSuggestions && filteredGyms.length > 0 && (
-          <ScrollView 
+        <TextInput
+          style={[
+            styles.input,
+            styles.bioInput, 
+            { 
+              borderColor: colors.border,
+              backgroundColor: colors.inputBackground,
+              color: colors.text
+            }
+          ]}
+          placeholder="Bio (optional)"
+          placeholderTextColor={colors.textSecondary}
+          value={bio}
+          onChangeText={setBio}
+          multiline
+          numberOfLines={4}
+          maxLength={160}
+        />
+
+        <View style={styles.gymInputContainer}>
+          <TextInput
             style={[
-              styles.suggestionsContainer,
-              {
+              styles.input,
+              { 
+                borderColor: colors.border,
                 backgroundColor: colors.inputBackground,
-                borderColor: colors.border
+                color: colors.text,
+                marginBottom: showGymSuggestions && filteredGyms.length > 0 ? 0 : 16,
+                borderBottomLeftRadius: showGymSuggestions && filteredGyms.length > 0 ? 0 : 8,
+                borderBottomRightRadius: showGymSuggestions && filteredGyms.length > 0 ? 0 : 8
               }
             ]}
-            keyboardShouldPersistTaps="handled"
-            nestedScrollEnabled
-          >
-            {filteredGyms.map((suggestion, index) => (
-              <TouchableOpacity
-                key={index}
-                style={[
-                  styles.suggestionItem,
-                  { borderBottomColor: colors.border }
-                ]}
-                onPress={() => {
-                  setGym(suggestion);
-                  setShowGymSuggestions(false);
-                }}
-              >
-                <Text style={[styles.suggestionText, { color: colors.text }]}>
-                  {suggestion}
-                </Text>
-              </TouchableOpacity>
-            ))}
-          </ScrollView>
-        )}
-      </View>
+            placeholder="Gym (optional)"
+            placeholderTextColor={colors.textSecondary}
+            value={gym}
+            onChangeText={(text) => {
+              setGym(text);
+              setShowGymSuggestions(true);
+            }}
+            onFocus={() => setShowGymSuggestions(true)}
+          />
+          
+          {showGymSuggestions && filteredGyms.length > 0 && (
+            <ScrollView 
+              style={[
+                styles.suggestionsContainer,
+                {
+                  backgroundColor: colors.inputBackground,
+                  borderColor: colors.border
+                }
+              ]}
+              keyboardShouldPersistTaps="handled"
+              nestedScrollEnabled
+            >
+              {filteredGyms.map((suggestion, index) => (
+                <TouchableOpacity
+                  key={index}
+                  style={[
+                    styles.suggestionItem,
+                    { borderBottomColor: colors.border }
+                  ]}
+                  onPress={() => {
+                    setGym(suggestion);
+                    setShowGymSuggestions(false);
+                  }}
+                >
+                  <Text style={[styles.suggestionText, { color: colors.text }]}>
+                    {suggestion}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          )}
+        </View>
 
-      <TouchableOpacity
-        style={[styles.button, loading && styles.buttonDisabled, { backgroundColor: colors.button }]}
-        onPress={handleSubmit}
-        disabled={loading}>
-        {loading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.buttonText}>Complete Registration</Text>
-        )}
-      </TouchableOpacity>
-    </View>
+        <TouchableOpacity
+          style={[styles.button, loading && styles.buttonDisabled, { backgroundColor: colors.button }]}
+          onPress={handleSubmit}
+          disabled={loading}>
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Complete Registration</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, Image, ActivityIndicator, Alert } from 'react-native';
 import { Plus, Minus, Save, X, Camera, CircleCheck as CheckCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -6,6 +6,7 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { useTheme } from '@/context/ThemeContext';
 import Colors from '@/constants/Colors';
+import WORKOUT_NAMES from '@/constants/WorkoutNames';
 
 interface Set {
   reps: string;
@@ -31,8 +32,12 @@ export default function WorkoutScreen() {
   const [isPrivate, setIsPrivate] = useState<boolean>(true);
   const [caption, setCaption] = useState('');
   const [totalWorkouts, setTotalWorkouts] = useState(43);
+  const [pastWorkouts, setPastWorkouts] = useState<any[]>([]);
+  const [showPastWorkoutsModal, setShowPastWorkoutsModal] = useState(false);
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
+  const [activeExerciseId, setActiveExerciseId] = useState<string | null>(null);
+  const [exerciseSuggestions, setExerciseSuggestions] = useState<string[]>([]);
   
   const currentDate = new Date();
   const formattedDate = `${currentDate.getDate().toString().padStart(2, '0')}/${(currentDate.getMonth() + 1).toString().padStart(2, '0')}/${currentDate.getFullYear()}`;
@@ -98,6 +103,19 @@ export default function WorkoutScreen() {
       }
       return exercise;
     }));
+
+    // Autocomplete logic
+    if (text.length >= 2) {
+      const filtered = WORKOUT_NAMES.filter(name =>
+        name.toLowerCase().includes(text.toLowerCase())
+      ).slice(0, 20); // limit suggestions
+      setActiveExerciseId(id);
+      setExerciseSuggestions(filtered);
+    } else {
+      if (activeExerciseId === id) {
+        setExerciseSuggestions([]);
+      }
+    }
   };
 
   const handleSetChange = (exerciseId: string, setIndex: number, field: keyof Set, value: string) => {
@@ -197,6 +215,35 @@ export default function WorkoutScreen() {
     }
   };
 
+  const loadPastWorkouts = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Sign in required', 'Please sign in to view past workouts.');
+        return;
+      }
+
+      const { data, error } = await supabase
+        .from('workouts')
+        .select('id, created_at, exercises, progress_image_url')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      console.log('Loaded workouts:', data);
+      data?.forEach((workout, index) => {
+        console.log(`Workout ${index + 1} progress_image_url:`, workout.progress_image_url);
+      });
+
+      setPastWorkouts(data || []);
+      setShowPastWorkoutsModal(true);
+    } catch (err) {
+      console.error('Error fetching past workouts:', err);
+      Alert.alert('Error', 'Failed to load past workouts.');
+    }
+  };
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <View style={[styles.header, { backgroundColor: colors.background }]}>
@@ -251,6 +298,15 @@ export default function WorkoutScreen() {
                 placeholderTextColor={colors.textSecondary}
                 value={exercise.name}
                 onChangeText={(text) => handleExerciseNameChange(exercise.id, text)}
+                onFocus={() => {
+                  setActiveExerciseId(exercise.id);
+                  if (exercise.name.length >= 2) {
+                    const filtered = WORKOUT_NAMES.filter(name =>
+                      name.toLowerCase().includes(exercise.name.toLowerCase())
+                    ).slice(0, 20);
+                    setExerciseSuggestions(filtered);
+                  }
+                }}
               />
               <TouchableOpacity
                 style={[
@@ -270,6 +326,29 @@ export default function WorkoutScreen() {
                 ]}>PR</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Suggestions list */}
+            {activeExerciseId === exercise.id && exerciseSuggestions.length > 0 && (
+              <ScrollView
+                style={[styles.exerciseSuggestionsContainer, { backgroundColor: colors.inputBackground, borderColor: colors.border }]}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+              >
+                {exerciseSuggestions.map((suggestion, idx) => (
+                  <TouchableOpacity
+                    key={idx}
+                    style={[styles.exerciseSuggestionItem, { borderBottomColor: colors.border }]}
+                    onPress={() => {
+                      handleExerciseNameChange(exercise.id, suggestion);
+                      setExerciseSuggestions([]);
+                      setActiveExerciseId(null);
+                    }}
+                  >
+                    <Text style={[styles.exerciseSuggestionText, { color: colors.text }]}>{suggestion}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
 
             <View style={styles.setsHeader}>
               <Text style={[styles.setsLabel, { color: colors.text }]}>Sets</Text>
@@ -342,7 +421,7 @@ export default function WorkoutScreen() {
                 styles.visibilityOptionText,
                 !isPrivate && styles.visibilityOptionTextActive,
                 { color: isPrivate ? colors.text : colors.tint }
-              ]}>My Profile</Text>
+              ]}>My Gym</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={[
@@ -374,9 +453,94 @@ export default function WorkoutScreen() {
           )}
         </TouchableOpacity>
 
-        <Text style={[styles.workoutCount, { color: colors.textSecondary }]}>
-          {totalWorkouts} workouts logged
-        </Text>
+        <TouchableOpacity
+          style={[styles.pastWorkoutsButton, { backgroundColor: colors.border }]}
+          onPress={loadPastWorkouts}
+        >
+          <Text style={[styles.pastWorkoutsButtonText, { color: colors.text }]}>See past workouts</Text>
+        </TouchableOpacity>
+
+        <Modal
+          visible={showPastWorkoutsModal}
+          animationType="slide"
+          onRequestClose={() => setShowPastWorkoutsModal(false)}
+        >
+          <View style={[styles.modalContainer, { backgroundColor: colors.background }]}>
+            <View style={styles.modalHeader}>
+              <Text style={[styles.modalTitle, { color: colors.text }]}>Past Workouts</Text>
+              <TouchableOpacity onPress={() => setShowPastWorkoutsModal(false)}>
+                <X size={28} color={colors.text} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              {pastWorkouts.length === 0 ? (
+                <Text style={[styles.emptyPastWorkoutsText, { color: colors.textSecondary }]}>No workouts found.</Text>
+              ) : (
+                pastWorkouts.map(workout => (
+                  <View key={workout.id} style={[styles.pastWorkoutItem, { borderColor: colors.border }]}>
+                    <View style={styles.pastWorkoutHeader}>
+                      <Text style={[styles.pastWorkoutDate, { color: colors.text }]}>
+                        {new Date(workout.created_at).toLocaleDateString()}
+                      </Text>
+                      <Text style={[styles.pastWorkoutExercises, { color: colors.textSecondary }]}>💪 {workout.exercises?.length || 0} exercises</Text>
+                    </View>
+                    
+                    {workout.progress_image_url && (
+                      <View style={styles.imageContainer}>
+                        <Image 
+                          source={{ uri: workout.progress_image_url }} 
+                          style={styles.pastWorkoutImage}
+                          resizeMode="cover"
+                          onError={(error) => {
+                            console.log('Image loading error:', error);
+                            console.log('Image URL:', workout.progress_image_url);
+                          }}
+                          onLoad={() => {
+                            console.log('Image loaded successfully:', workout.progress_image_url);
+                          }}
+                        />
+                      </View>
+                    )}
+                    
+                    {workout.exercises && workout.exercises.length > 0 && (
+                      <View style={styles.exercisesList}>
+                        {workout.exercises.map((exercise: any, index: number) => (
+                          <View key={index} style={styles.pastExerciseItem}>
+                            <View style={styles.pastExerciseHeader}>
+                              <Text style={[styles.pastExerciseName, { color: colors.text }]}>{exercise.name}</Text>
+                              {exercise.isPR && (
+                                <View style={[styles.prBadge, { backgroundColor: colors.tint }]}>
+                                  <Text style={styles.prBadgeText}>PR</Text>
+                                </View>
+                              )}
+                            </View>
+                            
+                            {exercise.sets && exercise.sets.length > 0 && (
+                              <View style={styles.pastSetsContainer}>
+                                <View style={styles.pastSetsHeader}>
+                                  <Text style={[styles.pastSetsHeaderText, { color: colors.textSecondary }]}>Set</Text>
+                                  <Text style={[styles.pastSetsHeaderText, { color: colors.textSecondary }]}>Reps</Text>
+                                  <Text style={[styles.pastSetsHeaderText, { color: colors.textSecondary }]}>Weight (kg)</Text>
+                                </View>
+                                {exercise.sets.map((set: any, setIndex: number) => (
+                                  <View key={setIndex} style={styles.pastSetRow}>
+                                    <Text style={[styles.pastSetData, { color: colors.text }]}>{setIndex + 1}</Text>
+                                    <Text style={[styles.pastSetData, { color: colors.text }]}>{set.reps}</Text>
+                                    <Text style={[styles.pastSetData, { color: colors.text }]}>{set.weight}</Text>
+                                  </View>
+                                ))}
+                              </View>
+                            )}
+                          </View>
+                        ))}
+                      </View>
+                    )}
+                  </View>
+                ))
+              )}
+            </ScrollView>
+          </View>
+        </Modal>
       </ScrollView>
     </View>
   );
@@ -387,7 +551,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingTop: 30,
+    paddingTop: 50,
     paddingHorizontal: 15,
     paddingBottom: 15,
   },
@@ -435,6 +599,8 @@ const styles = StyleSheet.create({
   },
   exerciseContainer: {
     marginBottom: 25,
+    position: 'relative',
+    zIndex: 999,
   },
   exerciseHeader: {
     flexDirection: 'row',
@@ -582,10 +748,119 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 8,
   },
-  workoutCount: {
-    textAlign: 'center',
-    fontSize: 16,
+  pastWorkoutsButton: {
+    alignSelf: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
     marginBottom: 20,
+  },
+  pastWorkoutsButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  modalContainer: {
+    flex: 1,
+    paddingTop: 50,
+    paddingHorizontal: 20,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  pastWorkoutItem: {
+    borderWidth: 1,
+    borderRadius: 8,
+    padding: 15,
+    marginBottom: 15,
+  },
+  pastWorkoutHeader: {
+    marginBottom: 12,
+  },
+  pastWorkoutDate: {
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  pastWorkoutExercises: {
+    marginTop: 4,
+    fontSize: 14,
+  },
+  imageContainer: {
+    width: '100%',
+    height: 150,
+    borderRadius: 8,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  pastWorkoutImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 8,
+  },
+  exercisesList: {
+    gap: 12,
+  },
+  pastExerciseItem: {
+    marginBottom: 8,
+  },
+  pastExerciseHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  pastExerciseName: {
+    fontSize: 16,
+    fontWeight: '600',
+    flex: 1,
+  },
+  prBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  prBadgeText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  pastSetsContainer: {
+    backgroundColor: 'rgba(0,0,0,0.05)',
+    borderRadius: 8,
+    padding: 8,
+  },
+  pastSetsHeader: {
+    flexDirection: 'row',
+    paddingBottom: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(0,0,0,0.1)',
+    marginBottom: 4,
+  },
+  pastSetsHeaderText: {
+    flex: 1,
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  pastSetRow: {
+    flexDirection: 'row',
+    paddingVertical: 2,
+  },
+  pastSetData: {
+    flex: 1,
+    fontSize: 14,
+    textAlign: 'center',
+  },
+  emptyPastWorkoutsText: {
+    textAlign: 'center',
+    marginTop: 50,
+    fontSize: 16,
   },
   errorContainer: {
     padding: 15,
@@ -594,5 +869,25 @@ const styles = StyleSheet.create({
   },
   errorText: {
     textAlign: 'center',
+  },
+  exerciseSuggestionsContainer: {
+    position: 'absolute',
+    top: 54, /* height of input (approx 44) + 10 marginBottom */
+    left: 0,
+    right: 0,
+    maxHeight: 180,
+    borderWidth: 1,
+    borderTopWidth: 0,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
+    zIndex: 9999,
+    elevation: 5,
+  },
+  exerciseSuggestionItem: {
+    padding: 10,
+    borderBottomWidth: 1,
+  },
+  exerciseSuggestionText: {
+    fontSize: 16,
   },
 });

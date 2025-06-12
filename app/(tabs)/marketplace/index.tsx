@@ -260,7 +260,7 @@ export default function MarketplaceScreen() {
             </View>
           ) : (
             <>
-              <Text style={[styles.sectionTitle, { color: colors.text }]}>Featured Products</Text>
+              <Text style={[styles.sectionTitle, { color: colors.text }]}>My Gym</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.featuredContainer}>
                 {featuredProducts.map((product) => (
                   <TouchableOpacity

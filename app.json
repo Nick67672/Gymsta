@@ -24,7 +24,7 @@
     ],
     "ios": {
       "bundleIdentifier": "com.vanta.gymsta",
-      "buildNumber": "32",
+      "buildNumber": "33",
       "supportsTablet": true,
       "config": {
         "usesNonExemptEncryption": false
@@ -34,7 +34,8 @@
         "NSCameraUsageDescription": "This app uses the camera to let you take photos to share with your friends.",
         "NSPhotoLibraryAddUsageDescription": "This app saves photos to your photo library.",
         "NSMicrophoneUsageDescription": "This app uses the microphone for video recording features."
-      }
+      },
+      "runtimeVersion": "1.0.0"
     },
     "web": {
       "bundler": "metro",
@@ -50,6 +51,18 @@
       },
       "eas": {
         "projectId": "c4a99eb9-0c86-4b84-b02b-b716d699e463"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/c4a99eb9-0c86-4b84-b02b-b716d699e463"
+    },
+    "android": {
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ],
+      "runtimeVersion": {
+        "policy": "appVersion"
       }
     }
   }

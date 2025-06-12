@@ -109,9 +109,9 @@ export default function HomeScreen() {
 
       if (followingError) throw followingError;
 
-      const profiles = followingData
-        .map(f => f.following)
-        .filter((p): p is Profile => p !== null);
+      const profiles = (followingData as any[])
+        .map((f: any) => f.following as Profile)
+        .filter(Boolean);
 
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       
@@ -123,10 +123,10 @@ export default function HomeScreen() {
 
       const profilesWithStoryStatus = profiles.map(profile => ({
         ...profile,
-        has_story: storiesData?.some(s => s.user_id === profile.id) || false
+        has_story: storiesData?.some((s: any) => s.user_id === profile.id) || false
       }));
 
-      setFollowing(profilesWithStoryStatus);
+      setFollowing(profilesWithStoryStatus as Profile[]);
     } catch (err) {
       console.error('Error loading following:', err);
     }
@@ -211,7 +211,7 @@ export default function HomeScreen() {
         !blockedUserIds.includes(post.profiles.id)
       );
       
-      setPosts(filteredPosts);
+      setPosts(filteredPosts as Post[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load posts');
     } finally {
@@ -243,7 +243,7 @@ export default function HomeScreen() {
         .limit(10);
 
       if (error) throw error;
-      setGymWorkouts(workouts || []);
+      setGymWorkouts((workouts || []) as Workout[]);
     } catch (err) {
       console.error('Error loading gym workouts:', err);
     }
@@ -365,8 +365,14 @@ export default function HomeScreen() {
   }, [blockingLoading, blockedUserIds]);
 
   // Separate useEffect for channel subscriptions to avoid multiple subscriptions
+  // We only create real-time subscriptions once the user is authenticated. This
+  // prevents the scenario where a channel is subscribed before login and then
+  // Supabase attempts a second subscribe when the session token changes,
+  // triggering the "subscribe can only be called a single time per channel
+  // instance" error.
   useEffect(() => {
     if (blockingLoading) return;
+    if (!isAuthenticated) return;
 
     // Clean up existing channels
     if (channelsRef.current.posts) {
@@ -464,7 +470,7 @@ export default function HomeScreen() {
       likesChannel.unsubscribe();
       storiesChannel.unsubscribe();
     };
-  }, [blockingLoading]); // Only depend on blockingLoading
+  }, [blockingLoading, isAuthenticated]); // Re-run when auth status changes
 
   const handleScroll = () => {
     if (playingVideo) {
