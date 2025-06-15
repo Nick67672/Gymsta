@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, ActivityIndicator, ScrollView, Modal } from 'react-native';
 import { Plus, CircleCheck as CheckCircle2 } from 'lucide-react-native';
 import { router } from 'expo-router';
@@ -8,6 +8,7 @@ import { useAuth } from '@/context/AuthContext';
 import { useBlocking } from '@/context/BlockingContext';
 import Colors from '@/constants/Colors';
 import StoryViewer from '@/components/StoryViewer';
+import { useFocusEffect } from '@react-navigation/native';
 
 interface Story {
   id: string;
@@ -51,6 +52,7 @@ export default function ChatScreen() {
   const [following, setFollowing] = useState<Profile[]>([]);
   const [selectedStories, setSelectedStories] = useState<Story[]>([]);
   const [showingStories, setShowingStories] = useState(false);
+  const [navigating, setNavigating] = useState(false);
 
   // Keep references to active realtime channels so we can clean them up and
   // avoid subscribing to the same channel instance multiple times.
@@ -95,9 +97,9 @@ export default function ChatScreen() {
 
       if (followingError) throw followingError;
 
-      const profiles = followingData
-        .map(f => f.following)
-        .filter((p): p is Profile => p !== null);
+      const profiles = (followingData
+        .map((f: { following: Profile | null }) => f.following)
+        .filter(Boolean) as Profile[]);
 
       const twentyFourHoursAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
       
@@ -112,7 +114,7 @@ export default function ChatScreen() {
         has_story: storiesData?.some(s => s.user_id === profile.id) || false
       }));
 
-      setFollowing(profilesWithStoryStatus);
+      setFollowing(profilesWithStoryStatus as Profile[]);
     } catch (err) {
       console.error('Error loading following:', err);
     }
@@ -180,8 +182,8 @@ export default function ChatScreen() {
           last_message: chat.last_message,
           created_at: chat.created_at,
           participants: chat.a_chat_users
-            .map(user => user.profiles)
-            .filter(profile => profile.id !== currentUserId)
+            .map((user: { profiles: Profile }) => user.profiles as Profile)
+            .filter((profile: Profile) => profile.id !== currentUserId)
         }));
 
         // Filter out chats with blocked users
@@ -223,12 +225,22 @@ export default function ChatScreen() {
     }
   };
 
+  // Reload chats & story status every time the screen regains focus. This
+  // covers the case where the user starts a brand-new conversation on a
+  // different screen and then navigates back here.
+  useFocusEffect(
+    useCallback(() => {
+      // Don't run if we haven't determined auth state yet.
+      if (!currentUserId || !isAuthenticated) return;
+
+      loadChats();
+      loadFollowing();
+      setNavigating(false);
+    }, [currentUserId, isAuthenticated])
+  );
+
   useEffect(() => {
     if (!currentUserId || !isAuthenticated) return;
-
-    // Always load data on mount / when dependencies change
-    loadChats();
-    loadFollowing();
 
     // Clean up any previously created channels to avoid duplicate
     // subscriptions which can trigger the `subscribe can only be called a
@@ -262,8 +274,20 @@ export default function ChatScreen() {
           const message = payload.new.message;
           const created_at = payload.new.created_at;
 
-          setChats(prevChats =>
-            prevChats
+          setChats(prevChats => {
+            const chatExists = prevChats.some(chat => chat.id === chatId);
+
+            if (!chatExists) {
+              // If this chat is not yet in state, trigger a full reload so the
+              // brand-new conversation appears in the list immediately.
+              // We intentionally *do not* mutate state here because we need the
+              // participants/blocked-user filtering logic from `loadChats`.
+              loadChats();
+              return prevChats;
+            }
+
+            // Chat already exists – update its preview and resort list.
+            const updatedChats = prevChats
               .map(chat => {
                 if (chat.id === chatId) {
                   return {
@@ -278,8 +302,10 @@ export default function ChatScreen() {
                 const aDate = a.recent_message?.created_at || a.created_at;
                 const bDate = b.recent_message?.created_at || b.created_at;
                 return new Date(bDate).getTime() - new Date(aDate).getTime();
-              })
-          );
+              });
+
+            return updatedChats;
+          });
         }
       )
       .subscribe();
@@ -429,7 +455,11 @@ export default function ChatScreen() {
               <TouchableOpacity
                 key={chat.id}
                 style={[styles.chatPreview, { borderBottomColor: colors.border }]}
+                disabled={navigating}
                 onPress={() => {
+                  if (navigating) return; // Extra safety
+                  setNavigating(true);
+
                   const participant = chat.participants[0];
                   router.push({
                     pathname: `/chat/${participant.username}`,
