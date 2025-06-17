@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import React from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, RefreshControl, Modal, ActivityIndicator, Dimensions, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Plus, Dumbbell, LogIn } from 'lucide-react-native';
+import { Dumbbell, LogIn } from 'lucide-react-native';
 import { FlashList } from '@shopify/flash-list';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
@@ -13,7 +13,9 @@ import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useBlocking } from '@/context/BlockingContext';
 import Colors from '@/constants/Colors';
-import FeedPost from '@/components/Post';
+import FeedPost from '../../components/Post';
+import StoriesRail from '../../components/StoriesRail';
+import WorkoutCard from '../../components/WorkoutCard';
 
 interface Story {
   id: string;
@@ -487,52 +489,6 @@ export default function HomeScreen() {
   // Virtualised list helpers
   // ---------------------------
 
-  // Header that shows the horizontal stories rail
-  const renderStoriesHeader = useCallback(() => (
-    <View style={styles.storiesContainer}>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.storiesContent}
-      >
-        {following
-          .filter((profile) => profile.has_story)
-          .map((profile) => (
-            <TouchableOpacity
-              key={profile.id}
-              style={styles.storyItem}
-              onPress={() => {
-                if (!isAuthenticated) {
-                  showAuthModal();
-                  return;
-                }
-                loadStories(profile.id);
-              }}
-            >
-              <View
-                style={[styles.storyRing, profile.has_story && styles.activeStoryRing]}
-              >
-                <Image
-                  source={{
-                    uri:
-                      profile.avatar_url ||
-                      `https://source.unsplash.com/random/100x100/?portrait&${profile.id}`,
-                  }}
-                  style={styles.storyAvatar}
-                />
-              </View>
-              <Text
-                style={[styles.storyUsername, { color: colors.textSecondary }]}
-                numberOfLines={1}
-              >
-                {profile.username}
-              </Text>
-            </TouchableOpacity>
-          ))}
-      </ScrollView>
-    </View>
-  ), [following, isAuthenticated, colors.textSecondary]);
-
   // Individual post renderer for FlashList
   const renderPost = useCallback(
     ({ item }: { item: Post }) => (
@@ -644,7 +600,15 @@ export default function HomeScreen() {
               refreshing={refreshing}
               onRefresh={onRefresh}
               onScrollBeginDrag={handleScroll}
-              ListHeaderComponent={renderStoriesHeader}
+              ListHeaderComponent={() => (
+                <StoriesRail
+                  following={following}
+                  theme={theme}
+                  loadStories={loadStories}
+                  isAuthenticated={isAuthenticated}
+                  showAuthModal={showAuthModal}
+                />
+              )}
             />
           )
         ) : (
@@ -678,28 +642,12 @@ export default function HomeScreen() {
                   ))}
                   
                   {gymWorkouts.map((workout) => (
-                    <TouchableOpacity
+                    <WorkoutCard
                       key={workout.id}
-                      style={[styles.workoutCard, { backgroundColor: colors.card }]}
-                      onPress={() => handleWorkoutPress(workout.id)}>
-                      <View style={styles.workoutHeader}>
-                        <Image
-                          source={{
-                            uri: workout.profiles.avatar_url ||
-                              `https://source.unsplash.com/random/100x100/?portrait&${workout.user_id}`
-                          }}
-                          style={styles.workoutAvatar}
-                        />
-                        <Text style={[styles.workoutUsername, { color: colors.text }]}> {workout.profiles.username} </Text>
-                      </View>
-                      {workout.progress_image_url && (
-                        <Image source={{ uri: workout.progress_image_url }} style={styles.workoutImage} />
-                      )}
-                      <View style={styles.workoutInfo}>
-                        <Text style={[styles.workoutExercises, { color: colors.textSecondary }]}> {workout.exercises.length} exercises </Text>
-                        <Text style={[styles.workoutTime, { color: colors.textSecondary }]}> {new Date(workout.created_at).toLocaleDateString()} </Text>
-                      </View>
-                    </TouchableOpacity>
+                      workout={workout}
+                      theme={theme}
+                      onPress={handleWorkoutPress}
+                    />
                   ))}
                 </>
               ) : (
