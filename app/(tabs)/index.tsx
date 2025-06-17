@@ -1,8 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, RefreshControl, Modal, ActivityIndicator, Dimensions, Alert } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { Plus, CircleCheck as CheckCircle2, Heart, Settings, X, Dumbbell, Pause, Play, LogIn, Flag } from 'lucide-react-native';
-import { VideoView, useVideoPlayer } from 'expo-video';
+import { Plus, Dumbbell, LogIn } from 'lucide-react-native';
 import { FlashList } from '@shopify/flash-list';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
@@ -13,6 +13,7 @@ import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import { useBlocking } from '@/context/BlockingContext';
 import Colors from '@/constants/Colors';
+import FeedPost from '@/components/Post';
 
 interface Story {
   id: string;
@@ -34,13 +35,7 @@ interface Post {
   media_type: string;
   created_at: string;
   product_id: string | null;
-  profiles: {
-    id: string;
-    username: string;
-    avatar_url: string | null;
-    is_verified: boolean;
-    gym: string | null;
-  };
+  profiles: any;
   likes: {
     id: string;
     user_id: string;
@@ -53,10 +48,7 @@ interface Workout {
   exercises: any[];
   created_at: string;
   progress_image_url: string | null;
-  profiles: {
-    username: string;
-    avatar_url: string | null;
-  };
+  profiles: any;
 }
 
 export default function HomeScreen() {
@@ -209,7 +201,7 @@ export default function HomeScreen() {
       
       // Filter out posts from blocked users
       const filteredPosts = postsWithMediaType.filter(post => 
-        !blockedUserIds.includes(post.profiles.id)
+        !blockedUserIds.includes((post.profiles as any).id)
       );
       
       setPosts(filteredPosts as Post[]);
@@ -488,8 +480,82 @@ export default function HomeScreen() {
 
   // Filter posts based on active tab
   const filteredPosts = activeTab === 'my-gym' && currentUserGym
-    ? posts.filter(post => post.profiles.gym === currentUserGym)
+    ? posts.filter(post => (post.profiles as any).gym === currentUserGym)
     : posts;
+
+  // ---------------------------
+  // Virtualised list helpers
+  // ---------------------------
+
+  // Header that shows the horizontal stories rail
+  const renderStoriesHeader = useCallback(() => (
+    <View style={styles.storiesContainer}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.storiesContent}
+      >
+        {following
+          .filter((profile) => profile.has_story)
+          .map((profile) => (
+            <TouchableOpacity
+              key={profile.id}
+              style={styles.storyItem}
+              onPress={() => {
+                if (!isAuthenticated) {
+                  showAuthModal();
+                  return;
+                }
+                loadStories(profile.id);
+              }}
+            >
+              <View
+                style={[styles.storyRing, profile.has_story && styles.activeStoryRing]}
+              >
+                <Image
+                  source={{
+                    uri:
+                      profile.avatar_url ||
+                      `https://source.unsplash.com/random/100x100/?portrait&${profile.id}`,
+                  }}
+                  style={styles.storyAvatar}
+                />
+              </View>
+              <Text
+                style={[styles.storyUsername, { color: colors.textSecondary }]}
+                numberOfLines={1}
+              >
+                {profile.username}
+              </Text>
+            </TouchableOpacity>
+          ))}
+      </ScrollView>
+    </View>
+  ), [following, isAuthenticated, colors.textSecondary]);
+
+  // Individual post renderer for FlashList
+  const renderPost = useCallback(
+    ({ item }: { item: Post }) => (
+      <FeedPost
+        post={item}
+        colors={colors}
+        playingVideo={playingVideo}
+        currentUserId={currentUserId}
+        flaggedPosts={flaggedPosts}
+        flagging={flagging}
+        setFlagging={setFlagging}
+        setFlaggedPosts={setFlaggedPosts}
+        isAuthenticated={isAuthenticated}
+        showAuthModal={showAuthModal}
+        toggleVideoPlayback={toggleVideoPlayback}
+        navigateToProfile={navigateToProfile}
+        handleLike={handleLike}
+        handleUnlike={handleUnlike}
+        videoRefs={videoRefs}
+      />
+    ),
+    [colors, playingVideo, currentUserId, flaggedPosts, flagging]
+  );
 
   if (error) {
     return (
@@ -565,197 +631,22 @@ export default function HomeScreen() {
         style={{ backgroundColor: colors.background }}
       >
         {activeTab === 'explore' ? (
-          <>
-            <View style={styles.storiesContainer}>
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                contentContainerStyle={styles.storiesContent}>
-                {following.filter(profile => profile.has_story).map((profile) => (
-                  <TouchableOpacity
-                    key={profile.id}
-                    style={styles.storyItem}
-                    onPress={() => {
-                      if (!isAuthenticated) {
-                        showAuthModal();
-                        return;
-                      }
-                      loadStories(profile.id);
-                    }}>
-                    <View style={[
-                      styles.storyRing,
-                      profile.has_story && styles.activeStoryRing
-                    ]}>
-                      <Image
-                        source={{
-                          uri: profile.avatar_url ||
-                            `https://source.unsplash.com/random/100x100/?portrait&${profile.id}`
-                        }}
-                        style={styles.storyAvatar}
-                      />
-                    </View>
-                    <Text style={[styles.storyUsername, { color: colors.textSecondary }]} numberOfLines={1}>
-                      {profile.username}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
+          loading ? (
+            <View style={styles.loadingContainer}>
+              <ActivityIndicator size="large" color={colors.tint} />
             </View>
-
-            <View style={styles.feed}>
-              {loading ? (
-                <View style={styles.loadingContainer}>
-                  <ActivityIndicator size="large" color={colors.tint} />
-                </View>
-              ) : (
-                filteredPosts.map((post) => (
-                  <View key={post.id} style={[styles.post, { backgroundColor: colors.card }]}>
-                    <TouchableOpacity 
-                      style={styles.postHeader}
-                      onPress={() => navigateToProfile(post.profiles.id, post.profiles.username)}>
-                      <Image
-                        source={{
-                          uri: post.profiles.avatar_url ||
-                            'https://source.unsplash.com/random/40x40/?portrait',
-                        }}
-                        style={styles.profilePic}
-                      />
-                      <View style={styles.usernameContainer}>
-                        <Text style={[styles.username, { color: colors.text }]}>{post.profiles.username}</Text>
-                        {post.profiles.is_verified && (
-                          <CheckCircle2 size={16} color="#fff" fill="#3B82F6" />
-                        )}
-                      </View>
-                    </TouchableOpacity>
-                    
-                    {post.media_type === 'video' ? (
-                      <View style={styles.videoWrapper}>
-                        <View style={styles.videoBackdrop} />
-                        <TouchableOpacity 
-                          style={styles.videoContainer}
-                          activeOpacity={0.9}
-                          onPress={() => toggleVideoPlayback(post.id)}
-                        >
-                          <VideoView
-                            ref={ref => { videoRefs.current[post.id] = ref; }}
-                            source={{ uri: post.image_url }}
-                            style={styles.videoContent}
-                            useNativeControls={false}
-                            isLooping
-                            shouldPlay={false}
-                            onPlaybackStatusUpdate={status => {
-                              if (status?.isPlaying && playingVideo !== post.id) {
-                                setPlayingVideo(post.id);
-                              } else if (!status?.isPlaying && playingVideo === post.id) {
-                                setPlayingVideo(null);
-                              }
-                            }}
-                          />
-                          <View style={styles.videoPlayButton}>
-                            {playingVideo === post.id ? (
-                              <Pause size={40} color="#fff" />
-                            ) : (
-                              <Play size={40} color="#fff" />
-                            )}
-                          </View>
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <View style={styles.imageContainer}>
-                        <Image 
-                          source={{ uri: post.image_url }} 
-                          style={styles.postImage}
-                        />
-                      </View>
-                    )}
-                    
-                    <View style={styles.postContent}>
-                      <View style={styles.postContentRow}>
-                        <View style={styles.captionContainer}>
-                          <Text 
-                            style={[styles.username, { color: colors.text }]}
-                            onPress={() => navigateToProfile(post.profiles.id, post.profiles.username)}>
-                            {post.profiles.username}
-                          </Text>
-                          {post.caption && (
-                            <Text style={[styles.caption, { color: colors.text }]} numberOfLines={2}>
-                              {post.caption}
-                            </Text>
-                          )}
-                          <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-                            {new Date(post.created_at).toLocaleDateString()}
-                          </Text>
-                        </View>
-                        <View style={styles.likeContainer}>
-                          <TouchableOpacity
-                            onPress={async () => {
-                              if (flaggedPosts[post.id] || flagging[post.id]) return;
-                              setFlagging(prev => ({ ...prev, [post.id]: true }));
-                              try {
-                                const { error } = await supabase
-                                  .from('posts')
-                                  .update({ is_flagged: true })
-                                  .eq('id', post.id);
-                                if (!error) {
-                                  setFlaggedPosts(prev => ({ ...prev, [post.id]: true }));
-                                } else {
-                                  Alert.alert('Error', 'Failed to flag post.');
-                                }
-                              } catch (err) {
-                                Alert.alert('Error', 'Failed to flag post.');
-                              } finally {
-                                setFlagging(prev => ({ ...prev, [post.id]: false }));
-                              }
-                            }}
-                            style={styles.flagButton}
-                            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                            disabled={flaggedPosts[post.id] || flagging[post.id]}
-                          >
-                            <Flag size={20} color={flaggedPosts[post.id] ? '#FFA500' : '#888'} fill={flaggedPosts[post.id] ? '#FFA500' : 'none'} />
-                          </TouchableOpacity>
-                          <TouchableOpacity 
-                            onPress={() => {
-                              if (!isAuthenticated) {
-                                showAuthModal();
-                                return;
-                              }
-                              const isLiked = currentUserId ? post.likes.some(like => like.user_id === currentUserId) : false;
-                              if (isLiked) {
-                                handleUnlike(post.id);
-                              } else {
-                                handleLike(post.id);
-                              }
-                            }}
-                          >
-                            <Heart
-                              size={24}
-                              color={colors.text}
-                              fill={currentUserId && post.likes.some(like => like.user_id === currentUserId) ? colors.text : 'none'}
-                            />
-                          </TouchableOpacity>
-                          <Text style={[styles.likes, { color: colors.text }]}>{post.likes.length} likes</Text>
-                        </View>
-                      </View>
-                    </View>
-
-                    {post.product_id && (
-                      <TouchableOpacity
-                        style={styles.seeProductButton}
-                        onPress={() => {
-                          if (!isAuthenticated) {
-                            showAuthModal();
-                            return;
-                          }
-                          router.push(`/marketplace/${post.product_id}`);
-                        }}>
-                        <Text style={styles.seeProductText}>See Product</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
-                ))
-              )}
-            </View>
-          </>
+          ) : (
+            <FlashList
+              data={filteredPosts}
+              renderItem={renderPost}
+              keyExtractor={(item) => item.id}
+              estimatedItemSize={600}
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              onScrollBeginDrag={handleScroll}
+              ListHeaderComponent={renderStoriesHeader}
+            />
+          )
         ) : (
           <View style={styles.gymWorkoutsContainer}>
             {loading ? (
@@ -766,149 +657,24 @@ export default function HomeScreen() {
               filteredPosts.length > 0 || gymWorkouts.length > 0 ? (
                 <>
                   {filteredPosts.map((post) => (
-                    <View key={post.id} style={[styles.post, { backgroundColor: colors.card }]}>
-                      <TouchableOpacity 
-                        style={styles.postHeader}
-                        onPress={() => navigateToProfile(post.profiles.id, post.profiles.username)}>
-                        <Image
-                          source={{
-                            uri: post.profiles.avatar_url ||
-                              `https://source.unsplash.com/random/40x40/?portrait&${post.profiles.id}`,
-                          }}
-                          style={styles.profilePic}
-                        />
-                        <View style={styles.usernameContainer}>
-                          <Text style={[styles.username, { color: colors.text }]}>{post.profiles.username}</Text>
-                          {post.profiles.is_verified && (
-                            <CheckCircle2 size={16} color="#fff" fill="#3B82F6" />
-                          )}
-                        </View>
-                      </TouchableOpacity>
-                      
-                      {post.media_type === 'video' ? (
-                        <View style={styles.videoWrapper}>
-                          <View style={styles.videoBackdrop} />
-                          <TouchableOpacity 
-                            style={styles.videoContainer}
-                            activeOpacity={0.9}
-                            onPress={() => toggleVideoPlayback(post.id)}
-                          >
-                            <VideoView
-                              ref={ref => { videoRefs.current[post.id] = ref; }}
-                              source={{ uri: post.image_url }}
-                              style={styles.videoContent}
-                              useNativeControls={false}
-                              isLooping
-                              shouldPlay={false}
-                              onPlaybackStatusUpdate={status => {
-                                if (status?.isPlaying && playingVideo !== post.id) {
-                                  setPlayingVideo(post.id);
-                                } else if (!status?.isPlaying && playingVideo === post.id) {
-                                  setPlayingVideo(null);
-                                }
-                              }}
-                            />
-                            <View style={styles.videoPlayButton}>
-                              {playingVideo === post.id ? (
-                                <Pause size={40} color="#fff" />
-                              ) : (
-                                <Play size={40} color="#fff" />
-                              )}
-                            </View>
-                          </TouchableOpacity>
-                        </View>
-                      ) : (
-                        <View style={styles.imageContainer}>
-                          <Image 
-                            source={{ uri: post.image_url }} 
-                            style={styles.postImage}
-                          />
-                        </View>
-                      )}
-                      
-                      <View style={styles.postContent}>
-                        <View style={styles.postContentRow}>
-                          <View style={styles.captionContainer}>
-                            <Text 
-                              style={[styles.username, { color: colors.text }]}
-                              onPress={() => navigateToProfile(post.profiles.id, post.profiles.username)}>
-                              {post.profiles.username}
-                            </Text>
-                            {post.caption && (
-                              <Text style={[styles.caption, { color: colors.text }]} numberOfLines={2}>
-                                {post.caption}
-                              </Text>
-                            )}
-                            <Text style={[styles.timestamp, { color: colors.textSecondary }]}>
-                              {new Date(post.created_at).toLocaleDateString()}
-                            </Text>
-                          </View>
-                          <View style={styles.likeContainer}>
-                            <TouchableOpacity
-                              onPress={async () => {
-                                if (flaggedPosts[post.id] || flagging[post.id]) return;
-                                setFlagging(prev => ({ ...prev, [post.id]: true }));
-                                try {
-                                  const { error } = await supabase
-                                    .from('posts')
-                                    .update({ is_flagged: true })
-                                    .eq('id', post.id);
-                                  if (!error) {
-                                    setFlaggedPosts(prev => ({ ...prev, [post.id]: true }));
-                                  } else {
-                                    Alert.alert('Error', 'Failed to flag post.');
-                                  }
-                                } catch (err) {
-                                  Alert.alert('Error', 'Failed to flag post.');
-                                } finally {
-                                  setFlagging(prev => ({ ...prev, [post.id]: false }));
-                                }
-                              }}
-                              style={styles.flagButton}
-                              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                              disabled={flaggedPosts[post.id] || flagging[post.id]}
-                            >
-                              <Flag size={20} color={flaggedPosts[post.id] ? '#FFA500' : '#888'} fill={flaggedPosts[post.id] ? '#FFA500' : 'none'} />
-                            </TouchableOpacity>
-                            <TouchableOpacity 
-                              onPress={() => {
-                                if (!isAuthenticated) {
-                                  showAuthModal();
-                                  return;
-                                }
-                                const isLiked = currentUserId ? post.likes.some(like => like.user_id === currentUserId) : false;
-                                if (isLiked) {
-                                  handleUnlike(post.id);
-                                } else {
-                                  handleLike(post.id);
-                                }
-                              }}
-                            >
-                              <Heart
-                                size={24}
-                                color={colors.text}
-                                fill={currentUserId && post.likes.some(like => like.user_id === currentUserId) ? colors.text : 'none'}
-                              />
-                            </TouchableOpacity>
-                            <Text style={[styles.likes, { color: colors.text }]}>{post.likes.length} likes</Text>
-                          </View>
-                        </View>
-                      </View>
-
-                      {post.product_id && (
-                        <TouchableOpacity
-                          style={styles.seeProductButton}
-                          onPress={() => {
-                            if (!isAuthenticated) {
-                              showAuthModal();
-                              return;
-                            }
-                            router.push(`/marketplace/${post.product_id}`);
-                          }}>
-                          <Text style={styles.seeProductText}>See Product</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
+                    <FeedPost
+                      key={post.id}
+                      post={post}
+                      colors={colors}
+                      playingVideo={playingVideo}
+                      currentUserId={currentUserId}
+                      flaggedPosts={flaggedPosts}
+                      flagging={flagging}
+                      setFlagging={setFlagging}
+                      setFlaggedPosts={setFlaggedPosts}
+                      isAuthenticated={isAuthenticated}
+                      showAuthModal={showAuthModal}
+                      toggleVideoPlayback={toggleVideoPlayback}
+                      navigateToProfile={navigateToProfile}
+                      handleLike={handleLike}
+                      handleUnlike={handleUnlike}
+                      videoRefs={videoRefs}
+                    />
                   ))}
                   
                   {gymWorkouts.map((workout) => (
@@ -924,23 +690,14 @@ export default function HomeScreen() {
                           }}
                           style={styles.workoutAvatar}
                         />
-                        <Text style={[styles.workoutUsername, { color: colors.text }]}>
-                          {workout.profiles.username}
-                        </Text>
+                        <Text style={[styles.workoutUsername, { color: colors.text }]}> {workout.profiles.username} </Text>
                       </View>
                       {workout.progress_image_url && (
-                        <Image
-                          source={{ uri: workout.progress_image_url }}
-                          style={styles.workoutImage}
-                        />
+                        <Image source={{ uri: workout.progress_image_url }} style={styles.workoutImage} />
                       )}
                       <View style={styles.workoutInfo}>
-                        <Text style={[styles.workoutExercises, { color: colors.textSecondary }]}>
-                          {workout.exercises.length} exercises
-                        </Text>
-                        <Text style={[styles.workoutTime, { color: colors.textSecondary }]}>
-                          {new Date(workout.created_at).toLocaleDateString()}
-                        </Text>
+                        <Text style={[styles.workoutExercises, { color: colors.textSecondary }]}> {workout.exercises.length} exercises </Text>
+                        <Text style={[styles.workoutTime, { color: colors.textSecondary }]}> {new Date(workout.created_at).toLocaleDateString()} </Text>
                       </View>
                     </TouchableOpacity>
                   ))}
@@ -1256,4 +1013,5 @@ const styles = StyleSheet.create({
   workoutTime: {
     fontSize: 14,
   },
+  activeToggle: {},
 });
