@@ -4,6 +4,7 @@
     "slug": "gymsta",
     "version": "1.0.1",
     "orientation": "portrait",
+    "jsEngine": "hermes",
     "icon": "./assets/images/icon.png",
     "scheme": "gymsta",
     "userInterfaceStyle": "automatic",

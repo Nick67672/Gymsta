@@ -22,4 +22,15 @@ config.resolver.alias = {
 // Add platform-specific extensions
 config.resolver.platforms = ['ios', 'android', 'web'];
 
+// Enable inline requires for faster start-up (modules evaluated lazily)
+config.transformer = {
+  ...config.transformer,
+  getTransformOptions: async () => ({
+    transform: {
+      experimentalImportSupport: false,
+      inlineRequires: true,
+    },
+  }),
+};
+
 module.exports = config; 

@@ -59,7 +59,8 @@
     "stripe": "^14.14.0",
     "util": "^0.12.5",
     "web-streams-polyfill": "^4.1.0",
-    "expo-updates": "~0.28.14"
+    "expo-updates": "~0.28.14",
+    "@shopify/flash-list": "^1.6.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",

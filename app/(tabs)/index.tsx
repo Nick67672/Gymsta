@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, RefreshCon
 import { useFocusEffect } from '@react-navigation/native';
 import { Plus, CircleCheck as CheckCircle2, Heart, Settings, X, Dumbbell, Pause, Play, LogIn, Flag } from 'lucide-react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { FlashList } from '@shopify/flash-list';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
