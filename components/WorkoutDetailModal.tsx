@@ -28,9 +28,10 @@ interface WorkoutDetailModalProps {
   workoutId: string | null;
   visible: boolean;
   onClose: () => void;
+  hideProgressImage?: boolean;
 }
 
-export default function WorkoutDetailModal({ workoutId, visible, onClose }: WorkoutDetailModalProps) {
+export default function WorkoutDetailModal({ workoutId, visible, onClose, hideProgressImage = false }: WorkoutDetailModalProps) {
   const { theme } = useTheme();
   const colors = Colors[theme];
   
@@ -68,7 +69,7 @@ export default function WorkoutDetailModal({ workoutId, visible, onClose }: Work
         .single();
 
       if (error) throw error;
-      setWorkout(data);
+      setWorkout(data as unknown as Workout);
     } catch (err) {
       console.error('Error loading workout:', err);
       setError('Failed to load workout details');
@@ -124,7 +125,7 @@ export default function WorkoutDetailModal({ workoutId, visible, onClose }: Work
                 {new Date(workout.date).toLocaleDateString()}
               </Text>
 
-              {workout.progress_image_url && (
+              {workout.progress_image_url && !hideProgressImage && (
                 <Image
                   source={{ uri: workout.progress_image_url }}
                   style={styles.progressImage}

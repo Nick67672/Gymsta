@@ -316,7 +316,7 @@ export default function UserProfileScreen() {
     if (!profile?.id) return;
 
     const subscription = supabase
-      .channel('followers_changes')
+      .channel(`followers_changes_${profile.id}_${Date.now()}`)
       .on(
         'postgres_changes',
         {

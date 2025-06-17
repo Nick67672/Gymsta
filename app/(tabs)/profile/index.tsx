@@ -1,7 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal } from 'react-native';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Modal, Platform, PanResponder } from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
-import { CircleCheck as CheckCircle2, Heart, Settings } from 'lucide-react-native';
+import { CircleCheck as CheckCircle2, Heart, Settings, ArrowLeft } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { router } from 'expo-router';
@@ -9,10 +9,13 @@ import StoryViewer from '@/components/StoryViewer';
 import { useTheme } from '@/context/ThemeContext';
 import { useAuth } from '@/context/AuthContext';
 import Colors from '@/constants/Colors';
+import WorkoutDetailModal from '@/components/WorkoutDetailModal';
 
-interface Story {
+interface ProfileStory {
   id: string;
   media_url: string;
+  user_id: string;
+  created_at?: string;
 }
 
 interface Profile {
@@ -46,6 +49,15 @@ interface Post {
   likes: any[];
 }
 
+interface WorkoutSummary {
+  id: string;
+  progress_image_url: string | null;
+  created_at: string;
+  exercises: {
+    name: string;
+  }[] | null;
+}
+
 export default function ProfileScreen() {
   const { theme } = useTheme();
   const colors = Colors[theme];
@@ -53,8 +65,13 @@ export default function ProfileScreen() {
   
   const [profile, setProfile] = useState<Profile | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
-  const [stories, setStories] = useState<Story[]>([]);
+  const [stories, setStories] = useState<ProfileStory[]>([]);
   const [posts, setPosts] = useState<Post[]>([]);
+  const [workouts, setWorkouts] = useState<WorkoutSummary[]>([]);
+  const [selectedWorkoutId, setSelectedWorkoutId] = useState<string | null>(null);
+  const [showWorkoutModal, setShowWorkoutModal] = useState(false);
+  const [showProgressImage, setShowProgressImage] = useState(false);
+  const [selectedProgressImageUrl, setSelectedProgressImageUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [uploadingStory, setUploadingStory] = useState(false);
@@ -62,6 +79,11 @@ export default function ProfileScreen() {
   const [hasProducts, setHasProducts] = useState(false);
   const [showProductsModal, setShowProductsModal] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [activeTab, setActiveTab] = useState<'posts' | 'progress'>('posts');
+  const [showProgressDetails, setShowProgressDetails] = useState(false);
+  const [workoutDetails, setWorkoutDetails] = useState<any>(null);
+  const [detailsLoading, setDetailsLoading] = useState(false);
+  const [detailsError, setDetailsError] = useState<string | null>(null);
 
   const loadProfile = async () => {
     // Check if user is authenticated first
@@ -118,7 +140,7 @@ export default function ProfileScreen() {
 
       if (!productsError) {
         setProducts(userProducts || []);
-        setHasProducts(userProducts && userProducts.length > 0);
+        setHasProducts((userProducts ?? []).length > 0);
       }
 
       // Load user's stories
@@ -128,7 +150,18 @@ export default function ProfileScreen() {
         .eq('user_id', user.id)
         .order('created_at', { ascending: true });
 
-      setStories(storiesData || []);
+      setStories((storiesData as ProfileStory[]) || []);
+
+      // Load user's workout progress
+      const { data: workoutsData, error: workoutsError } = await supabase
+        .from('workouts')
+        .select('id, created_at, progress_image_url, exercises')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (!workoutsError) {
+        setWorkouts(workoutsData || []);
+      }
 
       // Transform the data to include counts and story status
       setProfile({
@@ -137,13 +170,37 @@ export default function ProfileScreen() {
           followers: profileData.followers?.[0]?.count || 0,
           following: profileData.following?.[0]?.count || 0,
         },
-        has_story: storiesData && storiesData.length > 0
+        has_story: !!(storiesData && storiesData.length > 0)
       });
 
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load profile');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Separate loader for workouts to ensure we refresh when switching tabs
+  const loadWorkouts = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data: workoutsData, error: workoutsError } = await supabase
+        .from('workouts')
+        .select('id, created_at, progress_image_url, exercises')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (workoutsError) {
+        console.error('Error loading workouts for progress tab:', workoutsError);
+        return;
+      }
+
+      console.log('Loaded workouts for progress tab:', workoutsData?.length);
+      setWorkouts(workoutsData || []);
+    } catch (err) {
+      console.error('Unexpected error loading workouts:', err);
     }
   };
 
@@ -273,12 +330,19 @@ export default function ProfileScreen() {
     }, [])
   );
 
+  // Reload workouts whenever the user switches to the Progress tab
+  useEffect(() => {
+    if (activeTab === 'progress') {
+      loadWorkouts();
+    }
+  }, [activeTab]);
+
   // Set up real-time subscription for follower changes
   useEffect(() => {
     if (!profile?.id) return;
 
     const subscription = supabase
-      .channel('followers_changes')
+      .channel(`followers_changes_${profile.id}_${Date.now()}`)
       .on(
         'postgres_changes',
         {
@@ -298,6 +362,59 @@ export default function ProfileScreen() {
       subscription.unsubscribe();
     };
   }, [profile?.id]);
+
+  // Load workout details when user swipes to details view
+  useEffect(() => {
+    const loadDetails = async () => {
+      if (!showProgressImage || !selectedWorkoutId) return;
+      if (workoutDetails && workoutDetails.id === selectedWorkoutId) return;
+
+      try {
+        setDetailsLoading(true);
+        setDetailsError(null);
+        const { data, error } = await supabase
+          .from('workouts')
+          .select(`
+            id,
+            date,
+            exercises,
+            caption,
+            profiles (
+              username,
+              avatar_url
+            )
+          `)
+          .eq('id', selectedWorkoutId)
+          .single();
+
+        if (error) throw error;
+        setWorkoutDetails(data as any);
+      } catch (err) {
+        console.error('Error loading workout details:', err);
+        setDetailsError('Failed to load workout');
+      } finally {
+        setDetailsLoading(false);
+      }
+    };
+
+    loadDetails();
+  }, [showProgressImage, selectedWorkoutId]);
+
+  // PanResponder to detect horizontal swipe on progress photo viewer
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderRelease: (_, gestureState) => {
+        // Swipe left to show details, swipe right back to image
+        if (gestureState.dx < -50) {
+          setShowProgressDetails(true);
+        } else if (gestureState.dx > 50) {
+          setShowProgressDetails(false);
+        }
+      },
+    })
+  ).current;
 
   if (loading) {
     return (
@@ -417,30 +534,100 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <View style={styles.postsGrid}>
-          {posts.map((post) => (
-            <TouchableOpacity
-              key={post.id}
-              style={styles.postContainer}
-              onPress={() => router.push(`/profile/${post.id}`)}>
-              <Image source={{ uri: post.image_url }} style={styles.postImage} />
-              {post.caption && (
-                <Text style={[styles.postCaption, { color: colors.text }]} numberOfLines={2}>
-                  {post.caption}
-                </Text>
-              )}
-              <View style={styles.postInfo}>
-                <Text style={[styles.postTime, { color: colors.textSecondary }]}>
-                  {new Date(post.created_at).toLocaleDateString()}
-                </Text>
-                <View style={styles.likeContainer}>
-                  <Heart size={16} color={colors.text} fill={colors.text} />
-                  <Text style={[styles.likesCount, { color: colors.text }]}> {post.likes?.length || 0}</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))}
+        {/* Toggle Tabs */}
+        <View style={styles.toggleContainer}>
+          <TouchableOpacity
+            style={[styles.toggleButton, activeTab === 'posts' && styles.activeToggle]}
+            onPress={() => setActiveTab('posts')}
+          >
+            <Text
+              style={[styles.toggleText, { color: colors.text }, activeTab === 'posts' && styles.activeToggleText]}
+            >
+              My Posts
+            </Text>
+            {activeTab === 'posts' && (
+              <View style={[styles.underline, { backgroundColor: colors.tint }]} />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[styles.toggleButton, activeTab === 'progress' && styles.activeToggle]}
+            onPress={() => setActiveTab('progress')}
+          >
+            <Text
+              style={[styles.toggleText, { color: colors.text }, activeTab === 'progress' && styles.activeToggleText]}
+            >
+              My Progress
+            </Text>
+            {activeTab === 'progress' && (
+              <View style={[styles.underline, { backgroundColor: colors.tint }]} />
+            )}
+          </TouchableOpacity>
         </View>
+
+        {/* Content based on active tab */}
+        {activeTab === 'posts' ? (
+          <View style={styles.postsGrid}>
+            {posts.map((post) => (
+              <TouchableOpacity
+                key={post.id}
+                style={styles.postContainer}
+                onPress={() => router.push(`/profile/${post.id}`)}>
+                <Image source={{ uri: post.image_url }} style={styles.postImage} />
+                {post.caption && (
+                  <Text style={[styles.postCaption, { color: colors.text }]} numberOfLines={2}>
+                    {post.caption}
+                  </Text>
+                )}
+                <View style={styles.postInfo}>
+                  <Text style={[styles.postTime, { color: colors.textSecondary }]}>
+                    {new Date(post.created_at).toLocaleDateString()}
+                  </Text>
+                  <View style={styles.likeContainer}>
+                    <Heart size={16} color={colors.text} fill={colors.text} />
+                    <Text style={[styles.likesCount, { color: colors.text }]}> {post.likes?.length || 0}</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        ) : (
+          workouts.length === 0 ? (
+            <View style={styles.progressContainer}>
+              <Text style={[styles.progressText, { color: colors.textSecondary }]}>No progress to show yet.</Text>
+            </View>
+          ) : (
+            <View style={styles.postsGrid}>
+              {workouts.map((workout) => (
+                <TouchableOpacity
+                  key={workout.id}
+                  style={styles.postContainer}
+                  onPress={() => {
+                    setSelectedWorkoutId(workout.id);
+                    if (workout.progress_image_url) {
+                      setSelectedProgressImageUrl(workout.progress_image_url);
+                      setShowProgressImage(true);
+                      setWorkoutDetails(null);
+                      setShowProgressDetails(false);
+                    } else {
+                      setShowWorkoutModal(true);
+                    }
+                  }}>
+                  {workout.progress_image_url ? (
+                    <Image source={{ uri: workout.progress_image_url }} style={styles.postImage} />
+                  ) : (
+                    <View style={[styles.noImageContainer, { backgroundColor: colors.backgroundSecondary, borderColor: colors.border, borderWidth: 1 }]}>
+                      <Text style={[styles.noImageText, { color: colors.textSecondary }]}
+                        numberOfLines={2}>
+                        {workout.exercises?.[0]?.name || 'Workout'}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )
+        )}
       </ScrollView>
 
       <Modal
@@ -495,6 +682,133 @@ export default function ProfileScreen() {
               ))}
             </ScrollView>
           </View>
+        </View>
+      </Modal>
+
+      {/* Workout detail modal */}
+      <WorkoutDetailModal
+        workoutId={selectedWorkoutId}
+        visible={showWorkoutModal}
+        onClose={() => setShowWorkoutModal(false)}
+        hideProgressImage={true}
+      />
+
+      {/* Progress photo / details viewer modal */}
+      <Modal
+        visible={showProgressImage}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowProgressImage(false);
+          setShowProgressDetails(false);
+          setWorkoutDetails(null);
+        }}>
+        <View style={{ flex: 1, backgroundColor: 'black' }} {...panResponder.panHandlers}>
+          {/* Back button for image view */}
+          <TouchableOpacity
+            style={{
+              position: 'absolute',
+              top: 50,
+              left: 20,
+              zIndex: 10,
+              backgroundColor: 'rgba(0,0,0,0.5)',
+              borderRadius: 20,
+              padding: 10,
+            }}
+            onPress={() => {
+              setShowProgressImage(false);
+              setShowProgressDetails(false);
+            }}>
+            <ArrowLeft size={24} color="white" />
+          </TouchableOpacity>
+
+          {!showProgressDetails ? (
+            selectedProgressImageUrl && (
+              <Image
+                source={{ uri: selectedProgressImageUrl }}
+                style={{ flex: 1, resizeMode: 'contain' }}
+              />
+            )
+          ) : (
+            <ScrollView style={{ flex: 1, backgroundColor: colors.background }}>
+              <View style={{ padding: 15 }}>
+                {detailsLoading ? (
+                  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                    <ActivityIndicator size="large" color={colors.tint} />
+                  </View>
+                ) : detailsError ? (
+                  <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+                    <Text style={{ color: colors.error, textAlign: 'center', fontSize: 16 }}>{detailsError}</Text>
+                  </View>
+                ) : workoutDetails ? (
+                  <>
+                    {/* Date */}
+                    <Text style={{ color: colors.textSecondary, fontSize: 14, marginBottom: 15, marginTop: 40 }}>
+                      {new Date(workoutDetails.created_at || workoutDetails.date).toLocaleDateString()}
+                    </Text>
+
+                    {/* Caption */}
+                    {workoutDetails.caption && (
+                      <Text style={{ color: colors.text, fontSize: 16, marginBottom: 20, lineHeight: 24 }}>
+                        {workoutDetails.caption}
+                      </Text>
+                    )}
+
+                    {/* Exercises */}
+                    <View style={{ gap: 15, marginBottom: 20 }}>
+                      {(workoutDetails.exercises || []).map((exercise: any, index: number) => (
+                        <View 
+                          key={index} 
+                          style={{ 
+                            backgroundColor: colors.card, 
+                            borderRadius: 12, 
+                            padding: 15 
+                          }}>
+                          <View style={{ 
+                            flexDirection: 'row', 
+                            alignItems: 'center', 
+                            justifyContent: 'space-between', 
+                            marginBottom: 15 
+                          }}>
+                            <Text style={{ color: colors.text, fontSize: 18, fontWeight: '600' }}>
+                              {exercise.name}
+                            </Text>
+                            {exercise.isPR && (
+                              <View style={{ 
+                                flexDirection: 'row', 
+                                alignItems: 'center', 
+                                paddingHorizontal: 8, 
+                                paddingVertical: 4, 
+                                borderRadius: 12, 
+                                backgroundColor: colors.tint + '20',
+                                gap: 4 
+                              }}>
+                                <CheckCircle2 size={16} color={colors.tint} fill={colors.tint} />
+                                <Text style={{ color: colors.tint, fontSize: 14, fontWeight: '600' }}>PR</Text>
+                              </View>
+                            )}
+                          </View>
+
+                          <View style={{ flexDirection: 'row', marginBottom: 10 }}>
+                            <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 14, fontWeight: '500' }}>Set</Text>
+                            <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 14, fontWeight: '500' }}>Reps</Text>
+                            <Text style={{ flex: 1, color: colors.textSecondary, fontSize: 14, fontWeight: '500' }}>Weight</Text>
+                          </View>
+
+                          {(exercise.sets || []).map((set: any, setIndex: number) => (
+                            <View key={setIndex} style={{ flexDirection: 'row', marginBottom: 8 }}>
+                              <Text style={{ flex: 1, color: colors.text, fontSize: 16 }}>{setIndex + 1}</Text>
+                              <Text style={{ flex: 1, color: colors.text, fontSize: 16 }}>{set.reps}</Text>
+                              <Text style={{ flex: 1, color: colors.text, fontSize: 16 }}>{set.weight} kg</Text>
+                            </View>
+                          ))}
+                        </View>
+                      ))}
+                    </View>
+                  </>
+                ) : null}
+              </View>
+            </ScrollView>
+          )}
         </View>
       </Modal>
     </View>
@@ -726,5 +1040,54 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 18,
     fontWeight: 'bold',
+  },
+  progressContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  progressText: {
+    fontSize: 16,
+    textAlign: 'center',
+  },
+  toggleContainer: {
+    flexDirection: 'row',
+    paddingHorizontal: 15,
+    marginTop: 10,
+    marginBottom: 10,
+  },
+  toggleButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingVertical: 10,
+    position: 'relative',
+  },
+  toggleText: {
+    fontSize: 16,
+    fontWeight: '500',
+  },
+  activeToggleText: {
+    fontWeight: '600',
+  },
+  underline: {
+    position: 'absolute',
+    bottom: 0,
+    width: '50%',
+    height: 2,
+    borderRadius: 1,
+  },
+  activeToggle: {},
+  noImageContainer: {
+    width: '100%',
+    aspectRatio: 1,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 10,
+  },
+  noImageText: {
+    textAlign: 'center',
+    fontSize: 14,
+    fontWeight: '600',
   },
 });

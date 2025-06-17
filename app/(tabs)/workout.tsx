@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, Image, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, Image, ActivityIndicator, Alert, Platform } from 'react-native';
 import { Plus, Minus, Save, X, Camera, CircleCheck as CheckCircle } from 'lucide-react-native';
 import { router } from 'expo-router';
 import * as ImagePicker from 'expo-image-picker';
@@ -162,22 +162,60 @@ export default function WorkoutScreen() {
 
       if (imageUri) {
         setUploadingImage(true);
-        const fileName = `${user.id}/${Date.now()}.jpg`;
-        const response = await fetch(imageUri);
-        const blob = await response.blob();
-        
-        const { error: uploadError } = await supabase.storage
-          .from('workout_images')
-          .upload(fileName, blob);
 
-        if (uploadError) throw uploadError;
+        // Determine file extension & MIME type from selected image URI
+        const fileExt = imageUri.split('.').pop()?.toLowerCase() || 'jpg';
+        const mimeType = `image/${fileExt === 'jpg' ? 'jpeg' : fileExt}`;
 
-        const { data: { publicUrl } } = supabase.storage
-          .from('workout_images')
-          .getPublicUrl(fileName);
+        // Generate a unique filename in the bucket for this user
+        const fileName = `${user.id}/${Date.now()}.${fileExt}`;
 
-        progress_image_url = publicUrl;
-        setUploadingImage(false);
+        try {
+          if (Platform.OS === 'web') {
+            // Web: we can fetch the local object URL and upload the blob directly
+            const response = await fetch(imageUri);
+            if (!response.ok) throw new Error('Failed to fetch image data');
+
+            const blob = await response.blob();
+
+            const { error: uploadError } = await supabase.storage
+              .from('workout_images')
+              .upload(fileName, blob, {
+                contentType: mimeType,
+                cacheControl: '3600',
+                upsert: false,
+              });
+
+            if (uploadError) throw uploadError;
+          } else {
+            // Native (iOS/Android): use multipart/form-data via FormData API
+            const formData = new FormData();
+            formData.append('file', {
+              uri: imageUri,
+              name: fileName,
+              type: mimeType,
+            } as any);
+
+            const { error: uploadError } = await supabase.storage
+              .from('workout_images')
+              .upload(fileName, formData, {
+                contentType: 'multipart/form-data',
+                cacheControl: '3600',
+                upsert: false,
+              });
+
+            if (uploadError) throw uploadError;
+          }
+
+          // Get a public URL so we can render the image without additional auth headers
+          const { data: { publicUrl } } = supabase.storage
+            .from('workout_images')
+            .getPublicUrl(fileName);
+
+          progress_image_url = publicUrl;
+        } finally {
+          setUploadingImage(false);
+        }
       }
 
       const formattedExercises = validExercises.map(ex => ({
