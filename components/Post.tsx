@@ -4,29 +4,10 @@ import { Pause, Play, Heart, Flag, CircleCheck as CheckCircle2 } from 'lucide-re
 import { VideoView } from 'expo-video';
 import { router } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import { Post } from '../types/social';
 
 // Temporary alias to bypass missing TS prop typings for expo-video
 const Video: any = VideoView;
-
-interface Post {
-  id: string;
-  caption: string | null;
-  image_url: string;
-  media_type: string;
-  created_at: string;
-  product_id: string | null;
-  profiles: {
-    id: string;
-    username: string;
-    avatar_url: string | null;
-    is_verified?: boolean;
-    gym?: string | null;
-  };
-  likes: {
-    id: string;
-    user_id: string;
-  }[];
-}
 
 interface PostProps {
   post: Post;
@@ -89,7 +70,7 @@ const PostComponent: React.FC<PostProps> = ({
     <View style={[styles.post, { backgroundColor: colors.card }]}>      
       <TouchableOpacity
         style={styles.postHeader}
-        onPress={() => navigateToProfile(post.profiles.id, post.profiles.username)}
+        onPress={() => navigateToProfile(post.profiles.id ?? '', post.profiles.username)}
       >
         <Image
           source={{
@@ -141,7 +122,7 @@ const PostComponent: React.FC<PostProps> = ({
           <View style={styles.captionContainer}>
             <Text
               style={[styles.username, { color: colors.text }]}
-              onPress={() => navigateToProfile(post.profiles.id, post.profiles.username)}
+              onPress={() => navigateToProfile(post.profiles.id ?? '', post.profiles.username)}
             >
               {post.profiles.username}
             </Text>

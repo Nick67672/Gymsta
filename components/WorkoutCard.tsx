@@ -1,18 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, View, Image, Text, StyleSheet } from 'react-native';
 import Colors from '@/constants/Colors';
-
-interface Workout {
-  id: string;
-  user_id: string;
-  exercises: any[];
-  created_at: string;
-  progress_image_url: string | null;
-  profiles: {
-    username: string;
-    avatar_url: string | null;
-  };
-}
+import { Workout } from '../types/social';
 
 interface WorkoutCardProps {
   workout: Workout;

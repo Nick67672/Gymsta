@@ -1,13 +1,7 @@
 import React from 'react';
 import { View, ScrollView, StyleSheet, TouchableOpacity, Image, Text } from 'react-native';
+import { Profile } from '../types/social';
 import Colors from '@/constants/Colors';
-
-interface Profile {
-  id: string;
-  username: string;
-  avatar_url: string | null;
-  has_story: boolean;
-}
 
 interface StoriesRailProps {
   following: Profile[];
@@ -36,14 +30,14 @@ const StoriesRail: React.FC<StoriesRailProps> = ({
           .filter((profile) => profile.has_story)
           .map((profile) => (
             <TouchableOpacity
-              key={profile.id}
+              key={profile.id ?? profile.username}
               style={styles.storyItem}
               onPress={() => {
                 if (!isAuthenticated) {
                   showAuthModal();
                   return;
                 }
-                loadStories(profile.id);
+                loadStories(profile.id ?? '');
               }}
             >
               <View
@@ -53,7 +47,7 @@ const StoriesRail: React.FC<StoriesRailProps> = ({
                   source={{
                     uri:
                       profile.avatar_url ||
-                      `https://source.unsplash.com/random/100x100/?portrait&${profile.id}`,
+                      `https://source.unsplash.com/random/100x100/?portrait&${profile.id ?? profile.username}`,
                   }}
                   style={styles.storyAvatar}
                 />

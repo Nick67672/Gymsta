@@ -16,42 +16,7 @@ import Colors from '@/constants/Colors';
 import FeedPost from '../../components/Post';
 import StoriesRail from '../../components/StoriesRail';
 import WorkoutCard from '../../components/WorkoutCard';
-
-interface Story {
-  id: string;
-  media_url: string;
-  user_id: string;
-}
-
-interface Profile {
-  id: string;
-  username: string;
-  avatar_url: string | null;
-  has_story: boolean;
-}
-
-interface Post {
-  id: string;
-  caption: string | null;
-  image_url: string;
-  media_type: string;
-  created_at: string;
-  product_id: string | null;
-  profiles: any;
-  likes: {
-    id: string;
-    user_id: string;
-  }[];
-}
-
-interface Workout {
-  id: string;
-  user_id: string;
-  exercises: any[];
-  created_at: string;
-  progress_image_url: string | null;
-  profiles: any;
-}
+import { Story, Profile, Post, Workout } from '../../types/social';
 
 export default function HomeScreen() {
   const { theme } = useTheme();
@@ -82,8 +47,6 @@ export default function HomeScreen() {
     stories?: any;
   }>({});
   
-  const screenWidth = Dimensions.get('window').width;
-
   const loadFollowing = async () => {
     if (!isAuthenticated) return;
     
